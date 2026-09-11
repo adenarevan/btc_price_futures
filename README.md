@@ -45,6 +45,16 @@ Setelah penggantian build, muat ulang browser agar memakai aset terbaru.
 
 ## Pemeriksaan
 
+### Login di Vercel
+
+Environment variable harus memiliki **nilai**, bukan sekadar nama. Production memakai `APP_ORIGIN=https://btc-price-futures.vercel.app`, `ADMIN_USERNAME=admin`, `SESSION_MAX_AGE_SECONDS=28800`, `DEMO_MODE=false`, `AUTOMATION_ENABLED=false`, dan `AI_ENABLED=false`. Nilai Firebase, UID pemilik, email admin, serta dua secret CSRF/rate limit diisi privat di pengaturan Vercel. Secret minimal 32 karakter. Jangan mengunggah `.env.local`; `.vercelignore` mengecualikan berkas environment dan key.
+
+Perubahan environment berlaku pada deployment baru: redeploy setelah menyimpan. Preview dengan domain berbeda memerlukan `APP_ORIGIN` yang cocok; konfigurasi Production tidak otomatis memperbaiki Preview.
+
+`GET /api/auth/csrf` yang sehat merespons 200. Kesalahan konfigurasi kini merespons `SERVER_CONFIG_INVALID` (503) dengan **nama variabel saja**, tanpa nilainya. Nilai opsional kosong memakai default; domain production tetap wajib benar. `npx tsx scripts/config-readiness.ts <file-env> --vercel` memeriksa konfigurasi tanpa mencetak secret.
+
+### Tes lokal
+
 ```powershell
 npm run typecheck
 npm test

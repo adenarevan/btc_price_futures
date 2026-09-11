@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { ConfigurationError } from "./errors";
 const schema = z.object({
   APP_ORIGIN: z.url().default("http://localhost:3000"),
   ADMIN_USERNAME: z.literal("admin").default("admin"),
@@ -25,12 +26,27 @@ const schema = z.object({
 export function getConfig() {
   if (typeof window !== "undefined")
     throw new Error("Server configuration accessed in browser");
-  const c = schema.parse(process.env);
+  const env = { ...process.env };
+  // Hosting dashboards can save empty values. Optional settings should then
+  // use their declared defaults, not coerce an empty session lifetime to zero.
+  for (const key of ["APP_ORIGIN", "ADMIN_USERNAME", "SESSION_MAX_AGE_SECONDS", "DEMO_MODE", "AI_ENABLED", "AUTOMATION_ENABLED", "OPENAI_MODEL"]) {
+    const value = env[key]?.trim();
+    if (!value) delete env[key];
+    else env[key] = value;
+  }
+  if (env.VERCEL === "1" && !env.APP_ORIGIN)
+    throw new ConfigurationError(["APP_ORIGIN"]);
+  const result = schema.safeParse(env);
+  if (!result.success)
+    throw new ConfigurationError([...new Set(result.error.issues.map(issue => String(issue.path[0])))]);
+  const c = result.data;
   const origin = new URL(c.APP_ORIGIN);
-  if (origin.origin !== c.APP_ORIGIN)
-    throw new Error("APP_ORIGIN must be an exact origin");
+  if (c.APP_ORIGIN !== origin.origin && c.APP_ORIGIN !== `${origin.origin}/`)
+    throw new ConfigurationError(["APP_ORIGIN"]);
+  c.APP_ORIGIN = origin.origin;
   const local = ["localhost", "127.0.0.1", "[::1]"].includes(origin.hostname);
-  if (!local && origin.protocol !== "https:") throw new Error("HTTPS required");
+  if ((!local && origin.protocol !== "https:") || (env.VERCEL === "1" && local))
+    throw new ConfigurationError(["APP_ORIGIN"]);
   if (
     c.DEMO_MODE === "true" &&
     (process.env.NODE_ENV === "production" ||
@@ -39,6 +55,6 @@ export function getConfig() {
       !process.env.FIREBASE_AUTH_EMULATOR_HOST ||
       !c.FIREBASE_PROJECT_ID.startsWith("demo-"))
   )
-    throw new Error("Demo requires local emulator project demo-*");
+    throw new ConfigurationError(["DEMO_MODE"]);
   return { ...c, local, demo: c.DEMO_MODE === "true" };
 }

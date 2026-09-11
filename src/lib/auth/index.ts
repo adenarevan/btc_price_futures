@@ -5,7 +5,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { getConfig } from "../config";
 import { getAuth, getDb } from "../firebase/admin";
-import { AppError, safeError } from "../errors";
+import { AppError, ConfigurationError, safeError } from "../errors";
 import { Timestamp } from "firebase-admin/firestore";
 export interface OwnerIdentity {
   uid: string;
@@ -331,7 +331,9 @@ export async function authHandler(req: NextRequest, action: string) {
   } catch (error) {
     const e = safeError(error);
     return NextResponse.json(
-      { error: { code: e.code, message: e.code, retryable: e.retryable } },
+      { error: { code: e.code, message: e instanceof ConfigurationError ? "Konfigurasi server belum valid. Periksa environment variable yang disebutkan lalu redeploy." : e.code, retryable: e.retryable,
+        ...(e instanceof ConfigurationError ? { fields: e.fields } : {}),
+      } },
       {
         status: e.status,
         headers: {

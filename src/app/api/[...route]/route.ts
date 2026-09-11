@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { guardRequest, verifyMutation, rateLimit } from "@/lib/auth";
-import { AppError, safeError } from "@/lib/errors";
+import { AppError, ConfigurationError, safeError } from "@/lib/errors";
 import * as service from "@/lib/services";
 import { symbolSchema, displayQuote } from "@/lib/market";
 export const runtime = "nodejs";
@@ -166,7 +166,7 @@ async function handler(
     }
     return NextResponse.json(
       {
-        error: { code: e.code, message: e.code, retryable: e.retryable },
+        error: { code: e.code, message: e.code, retryable: e.retryable, ...(e instanceof ConfigurationError ? { fields: e.fields } : {}) },
         meta: { requestId },
       },
       {

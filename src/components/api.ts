@@ -1,9 +1,11 @@
 export class ApiError extends Error {
-  constructor(public code: string) {
+  constructor(public code: string, public fields: string[] = []) {
     super(code);
   }
 }
 export const messages: Record<string, string> = {
+  SERVER_CONFIG_INVALID: "Konfigurasi server Vercel belum valid. Perbaiki environment variable lalu redeploy.",
+  INPUT_INVALID: "Data yang dikirim belum sesuai format. Periksa isian dan coba lagi.",
   AUTH_NOT_READY:
     "Firebase dan akun admin belum dikonfigurasi. Jalankan bootstrap privat sesuai README.",
   ACCOUNT_NOT_READY:
@@ -57,7 +59,7 @@ export async function api<T>(
   if (method !== "GET") {
     const csrf = await fetch("/api/auth/csrf", { cache: "no-store", signal: AbortSignal.timeout(15000) });
     const json = await csrf.json();
-    if (!csrf.ok) throw new ApiError(json.error?.code ?? "SERVICE_UNAVAILABLE");
+    if (!csrf.ok) throw new ApiError(json.error?.code ?? "SERVICE_UNAVAILABLE", Array.isArray(json.error?.fields) ? json.error.fields.filter((f: unknown) => typeof f === "string" && /^[A-Z_]+$/.test(f)) : []);
     headers["X-CSRF-Token"] = json.data.token;
     headers["Content-Type"] = "application/json";
     if (key) headers["Idempotency-Key"] = key;
@@ -75,13 +77,13 @@ export async function api<T>(
       window.location.assign("/login");
     if (json.error?.code === "PASSWORD_ROTATION_REQUIRED")
       window.location.assign("/account/password");
-    throw new ApiError(json.error?.code ?? "SERVICE_UNAVAILABLE");
+    throw new ApiError(json.error?.code ?? "SERVICE_UNAVAILABLE", Array.isArray(json.error?.fields) ? json.error.fields.filter((f: unknown) => typeof f === "string" && /^[A-Z_]+$/.test(f)) : []);
   }
   return json.data as T;
 }
 export const errorMessage = (e: unknown) =>
   e instanceof ApiError
-    ? (messages[e.code] ?? e.code)
+    ? (messages[e.code] ?? e.code) + (e.code === "SERVER_CONFIG_INVALID" && e.fields.length ? ` Variabel: ${e.fields.join(", ")}.` : "")
     : e instanceof Error && e.name === "TimeoutError"
       ? messages.REQUEST_TIMEOUT!
     : "Koneksi terputus. Periksa hasil tersimpan sebelum mengulang transaksi.";

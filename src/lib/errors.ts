@@ -9,6 +9,11 @@ export class AppError extends Error {
     super(code);
   }
 }
+export class ConfigurationError extends AppError {
+  constructor(public fields: string[]) {
+    super("SERVER_CONFIG_INVALID", 503);
+  }
+}
 export function safeError(error: unknown) {
   if (error instanceof AppError) return error;
   if (error instanceof EngineError)

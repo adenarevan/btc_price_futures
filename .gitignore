@@ -24,3 +24,5 @@ PRD_SinyalLab_Futures_v1.2*.docx
 .DS_Store
 Thumbs.db
 *.tsbuildinfo
+
+.vercel

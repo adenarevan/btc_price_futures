@@ -11,6 +11,8 @@ async function main() {
   loadEnvironment();
   const c = getConfig();
   if (!c.local) throw new Error("LOCAL_CHECK_ONLY");
+  const production = process.argv.includes("--production");
+  const baseUrl = production ? "https://btc-price-futures.vercel.app" : c.APP_ORIGIN;
   const token = await getAuth().createCustomToken(c.OWNER_UID);
   const response = await fetch(`https://identitytoolkit.googleapis.com/v1/accounts:signInWithCustomToken?key=${encodeURIComponent(c.FIREBASE_WEB_API_KEY)}`, {
     method: "POST", headers: { "Content-Type": "application/json" },
@@ -25,7 +27,7 @@ async function main() {
     const context = await browser.newContext({ viewport: { width: 1366, height: 900 } });
     // General smoke checks must not start scheduled scans or consume AI quota.
     await context.addInitScript(() => localStorage.setItem("sinyallab-signal-monitor", "off"));
-    await context.addCookies([{ name: "sinyallab_dev_session", value: session, url: c.APP_ORIGIN, httpOnly: true, sameSite: "Lax" }]);
+    await context.addCookies([{ name: production ? "__Host-sinyallab_session" : "sinyallab_dev_session", value: session, url: baseUrl, httpOnly: true, secure: production, sameSite: "Lax" }]);
     const page = await context.newPage();
     const errors: string[] = [];
     page.on("pageerror", error => errors.push(error.message));
@@ -43,9 +45,18 @@ async function main() {
       });
     }
     const dashboardResponse = page.waitForResponse(r => r.url().endsWith("/api/dashboard"));
-    await page.goto(`${c.APP_ORIGIN}/dashboard`);
+    await page.goto(`${baseUrl}/dashboard`);
     expect((await dashboardResponse).status()).toBe(200);
     await expect(page.getByRole("heading", { name: "Latihan paper trade" })).toBeVisible({ timeout: 20000 });
+    if (process.argv.includes("--auth-only")) {
+      const csrf = await context.request.get(`${baseUrl}/api/auth/csrf`);
+      expect(csrf.status()).toBe(200);
+      expect(typeof (await csrf.json()).data.token).toBe("string");
+      if (production) expect(csrf.headers()["set-cookie"]).toContain("__Host-sinyallab_nonce=");
+      expect(errors).toEqual([]);
+      console.log("PASS: production CSRF endpoint, secure nonce cookie and authenticated workspace/Firebase reads. Password was not changed or supplied.");
+      return;
+    }
     if (process.argv.includes("--alerts")) {
       await page.getByRole("button", { name: "Aktifkan pemantauan", exact: true }).click();
       await expect(page.locator(".signal-notification")).toHaveCount(2, { timeout: 20000 });
@@ -79,7 +90,7 @@ async function main() {
     await expect(page.getByRole("dialog")).toContainText("Perkiraan hasil di target");
     await page.getByRole("button", { name: "Batal", exact: true }).click();
     for (const section of ["positions", "signals", "journal", "evaluation", "settings", "system"]) {
-      await page.goto(`${c.APP_ORIGIN}/${section}`);
+      await page.goto(`${baseUrl}/${section}`);
       await expect(page.getByText("Memuat workspace…")).toHaveCount(0, { timeout: 20000 });
       await expect(page.getByRole("heading", { name: "Workspace belum tersedia" })).toHaveCount(0);
       const alert = page.locator('.error[role="alert"]');
@@ -87,7 +98,7 @@ async function main() {
       console.log(`PASS: ${section}`);
     }
     await page.setViewportSize({ width: 390, height: 844 });
-    await page.goto(`${c.APP_ORIGIN}/dashboard`);
+    await page.goto(`${baseUrl}/dashboard`);
     await expect(page.getByRole("button", { name: "Lihat perkiraan trade" })).toBeVisible({ timeout: 20000 });
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
     await page.getByRole("button", { name: "Lihat perkiraan trade" }).click();
