@@ -1,0 +1,9 @@
+{
+  "label": "DEMO — synthetic accounting, not a BTC/ETH price or strategy result",
+  "equity": "1000", "qty": "2", "entry": "100", "leverage": 5,
+  "feeRate": "0.0006", "slippageRate": "0", "initialMargin": "40",
+  "entryFee": "0.12", "availableAfterOpen": "959.88",
+  "eventMark": "100", "settledRate": "0.001",
+  "long": {"exit": "110", "funding": "-0.2", "netPnl": "19.548", "returnedCollateral": "59.668", "finalEquity": "1019.548"},
+  "short": {"exit": "90", "funding": "0.2", "netPnl": "19.972", "returnedCollateral": "60.092", "finalEquity": "1019.972"}
+}

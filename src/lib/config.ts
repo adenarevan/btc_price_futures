@@ -1,0 +1,44 @@
+import { z } from "zod";
+const schema = z.object({
+  APP_ORIGIN: z.url().default("http://localhost:3000"),
+  ADMIN_USERNAME: z.literal("admin").default("admin"),
+  ADMIN_AUTH_EMAIL: z.string().default(""),
+  FIREBASE_WEB_API_KEY: z.string().default(""),
+  FIREBASE_PROJECT_ID: z.string().default(""),
+  FIREBASE_CLIENT_EMAIL: z.string().default(""),
+  FIREBASE_PRIVATE_KEY: z.string().default(""),
+  OWNER_UID: z.string().default(""),
+  CSRF_SIGNING_SECRET: z.string().default(""),
+  RATE_LIMIT_HMAC_SECRET: z.string().default(""),
+  OPENAI_API_KEY: z.string().default(""),
+  OPENAI_MODEL: z.string().default("gpt-5-mini-2025-08-07"),
+  DEMO_MODE: z.enum(["true", "false"]).default("false"),
+  AI_ENABLED: z.enum(["true", "false"]).default("true"),
+  AUTOMATION_ENABLED: z.enum(["false"]).default("false"),
+  SESSION_MAX_AGE_SECONDS: z.coerce
+    .number()
+    .int()
+    .min(300)
+    .max(28800)
+    .default(28800),
+});
+export function getConfig() {
+  if (typeof window !== "undefined")
+    throw new Error("Server configuration accessed in browser");
+  const c = schema.parse(process.env);
+  const origin = new URL(c.APP_ORIGIN);
+  if (origin.origin !== c.APP_ORIGIN)
+    throw new Error("APP_ORIGIN must be an exact origin");
+  const local = ["localhost", "127.0.0.1", "[::1]"].includes(origin.hostname);
+  if (!local && origin.protocol !== "https:") throw new Error("HTTPS required");
+  if (
+    c.DEMO_MODE === "true" &&
+    (process.env.NODE_ENV === "production" ||
+      !local ||
+      !process.env.FIRESTORE_EMULATOR_HOST ||
+      !process.env.FIREBASE_AUTH_EMULATOR_HOST ||
+      !c.FIREBASE_PROJECT_ID.startsWith("demo-"))
+  )
+    throw new Error("Demo requires local emulator project demo-*");
+  return { ...c, local, demo: c.DEMO_MODE === "true" };
+}

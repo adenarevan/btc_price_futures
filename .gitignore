@@ -1,0 +1,26 @@
+# dependencies and builds
+/node_modules/
+/.next/
+/out/
+/coverage/
+/playwright-report/
+/test-results/
+/.firebase/
+/firebase-debug.log
+
+# local environment and secrets
+.env
+.env.local
+.env.*.local
+!.env.example
+*.pem
+*.key
+*service-account*.json
+
+# private source artifacts (the Markdown PRD is the sanitized repository copy)
+PRD_SinyalLab_Futures_v1.2*.docx
+
+# OS/editor
+.DS_Store
+Thumbs.db
+*.tsbuildinfo

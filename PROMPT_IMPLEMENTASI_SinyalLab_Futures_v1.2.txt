@@ -1,0 +1,35 @@
+Gunakan PRD_SinyalLab_Futures_v1.2.md sebagai spesifikasi utama. Ini MENGGANTIKAN login Google v1.1 dan PRD v1.0 spot. Bangun SinyalLab Futures yang fungsional, bukan hanya mock UI.
+
+SCOPE
+P0 B01-B07: Next.js App Router + TypeScript strict + Tailwind; Firebase Auth Email/Password via backend dengan session cookie; Firestore melalui backend; OpenAI Responses API. Crypto USDT-margined LINEAR PERPETUAL FUTURES BTCUSDT dan ETHUSDT, LONG dan SHORT. ISOLATED, ONE_WAY, default leverage 3x, opsi 1x/2x/3x/5x. Semua saldo SIMULASI. Tidak ada API key exchange, order riil, cross margin, hedge mode, berita atau withdrawal.
+
+URUTAN KERJA
+Periksa repository dan dependency. Scaffold bila kosong. Kunci versi melalui lockfile. Kerjakan: config/UI shell -> username auth/session/CSRF/rotasi/schema v2 -> futures adapter -> indicator/strategy/risk/margin -> agent -> collateral ledger/funding/portfolio UI -> concurrency/security/evaluation/tests/deploy. Ikuti seluruh acceptance criteria AT01-AT52.
+
+ATURAN WAJIB
+1. Login hanya form username/password, akun admin; tanpa Google/OAuth/registrasi. Server memetakan admin ke ADMIN_AUTH_EMAIL, memverifikasi password melalui Firebase Auth REST, lalu membuat HttpOnly session cookie. verifySessionCookie(checkRevoked=true), OWNER_UID, role dan flag rotasi diperiksa server. Firestore client deny-all. Semua uang/quantity memakai decimal arithmetic.
+2. Provider binance-usdm-public, endpoint /fapi; JANGAN gunakan /api/v3 atau data spot. Pisahkan trade candles, bid/ask, mark/index dan funding settled. Hanya kontrak perpetual linear USDT berstatus TRADING. Jangan menghindari pembatasan provider atau mengganti sumber ke mock diam-diam.
+3. Candle tertutup, rolling window tidak memasukkan pemicu, timestamp fresh, metadata filters valid. LONG: trend up + high breakout; SHORT: trend down + low breakdown. Hitung strategi dan sizing sebelum AI.
+4. Agent hanya CONFIRM atau WAIT untuk sisi yang diberikan. Tidak boleh mengubah side, harga, stop, target, quantity, leverage atau risiko. Tool read-only, schema/factId valid, batas request/token/timeout. Gagal review -> WAIT; exit/funding/margin tidak memerlukan AI.
+5. Collateral ledger futures, BUKAN spot accounting: open mengunci notional/leverage ditambah entryFee, bukan seluruh notional. P&L = sideMultiplier*qty*(exit-entry); jangan dikalikan leverage lagi. Fee/slippage benar pada kedua sisi; risk/notional/margin cap diperiksa atomik.
+6. LONG entry ask / close bid; SHORT entry bid / close ask, ditambah adverse slippage. Mark price untuk margin model, bukan dianggap fill executable. Price card seluruhnya dari engine.
+7. Funding cashflow = -sideMultiplier*qty*eventMark*settledRate. Event time dan mark historis, interval dinamis, posting idempotent. Pending tidak dianggap nol; close tetap boleh dan late settlement direkonsiliasi satu kali.
+8. Model isolated margin adalah PERKIRAAN, bukan harga likuidasi exchange. Tampilkan asumsi dan versi. Stop/target hanya alert; tidak memasang order perlindungan. Model margin breach yang teramati dapat mengakhiri PAPER position sebagai LIQUIDATED_SIM tanpa order riil. Deficit dicatat dan entry diblokir; jangan menyembunyikan kerugian. Baca pengecualian LONG1x pada bagian 6.4.
+9. Open/close normal melalui konfirmasi pengguna. Tidak boleh reversal/hedge otomatis. Idempotency, accountVersion, transactions, lease/fencing, dan atomic quota wajib. Network call tidak dalam callback transaction. Sinyal consumed tidak dipakai lagi.
+10. Secret server-only (termasuk password, CSRF_SIGNING_SECRET dan RATE_LIMIT_HMAC_SECRET): OpenAI key, service account, CRON_SECRET, Telegram token. Tidak masuk NEXT_PUBLIC_, source, browser bundle atau log. Jangan minta user membagikan secret ke kode publik.
+11. P0 manual, tanpa cron default. Contoh P1 terpisah: scan kandidat 15m, monitor risiko 1m TANPA AI. Jangan deploy konfigurasi tersebut pada Hobby tanpa dukungan plan. Monitoring snapshot bukan perlindungan tick/stop riil.
+12. Migrasi: akun/sinyal spot lama read-only; buat paper-futures-v1, schemaVersion2. Jangan mengubah qty/saldo/history spot menjadi futures.
+
+13. Akun awal: username admin; password sementara sesuai instruksi privat pemilik di PRD. Bootstrap melalui input terminal tersembunyi, bukan source, .env.example, command line argument, log, browser, atau fallback. Jangan reset akun existing saat seed/deploy. Wajib ganti password sebelum akses publik; endpoint trading diblokir sampai rotasi. Password dikelola Firebase Auth, bukan Firestore. Pertahankan UID pemilik lama saat migrasi.
+14. Implementasikan CSRF + exact Origin, cookie Secure/HttpOnly/host-only, logout/revoke, re-auth saat ganti password, error login generik, limiter atomik Firestore dan readiness. Tidak ada Firebase client SDK, token di localStorage, atau NEXT_PUBLIC_ untuk konfigurasi rahasia.
+15. Target hasil ekonomi positif BUKAN jaminan profit. Bangun metrics/gate bagian 15.4: NOT_TESTED, INSUFFICIENT_DATA, FAILED, PASSED_RESEARCH_GATE. Tanpa evidence jangan tampilkan badge lulus. Masukkan trading fees/funding/slippage dan biaya AI/cloud/data tanpa double count atau menganggap missing cost nol. Tetap paper, tidak otomatis mengaktifkan uang riil.
+16. Holdout/freeze/version, sample dan durasi, baseline vs agent forward wajib; jangan menghapus loss/deficit atau memilih ulang periode yang untung. Angka ambang bukan hasil backtest. Bedakan kelulusan engineering dari kelulusan ekonomi, sehingga task implementasi bisa selesai sambil mencatat strategi belum teruji.
+
+DELIVERABLE
+Source lengkap; unit/integration/Firebase Emulator/e2e tests; fixture LONG/SHORT/funding/margin; README setup/deploy; .env.example; firestore.rules; firestore.indexes.json; firebase.json; config/vercel.p1.json terpisah; script bootstrap-admin privat, auth-readiness, replay lokal, import-evaluation tervalidasi, migration/seed-dev dan live smoke test. Jalankan build, typecheck, lint, tes yang tersedia dan laporkan hasil nyata. Tidak ada klaim akurasi/profit/backtest/deploy atau akun admin sudah dibuat yang belum dibuktikan. Salinan PRD untuk repository publik harus menghapus password sementara.
+
+TANPA CREDENTIAL
+Tetap bangun dan uji melalui emulator serta fixture berlabel DEMO. Production tidak boleh fallback demo. Dokumentasikan environment dan langkah owner yang belum selesai; jangan mengaku terhubung atau deployed. Jangan menambah Laravel, MySQL/PostgreSQL, Redis, Docker, vector DB atau fitur di luar PRD.
+
+LAPORAN AKHIR
+Daftar modul/file, status B01-B07 dan AT01-AT52, hasil tes yang benar-benar dijalankan, keterbatasan, status evaluasi strategi yang sebenarnya, dan langkah konfigurasi akun/deployment yang masih perlu dilakukan. Jangan memakai PRD/prompt spot v1.0 sebagai sumber aturan yang bertentangan.
