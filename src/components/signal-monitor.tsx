@@ -14,9 +14,11 @@ const autoPreference = "sinyallab-auto-paper-entry";
 function read(key: string) { try { return localStorage.getItem(key); } catch { return null; } }
 function save(key: string, value: string) { try { localStorage.setItem(key, value); } catch { /* In-memory operation still works. */ } }
 type Result = { symbol: SymbolName; signal?: Signal; error?: string };
-export function SignalMonitor({ signals, aiReady, mode, now, onSignal, onEntry }: { signals: Signal[]; aiReady: boolean; mode: SignalMode; now: number; onSignal: (signal: Signal) => void; onEntry: () => void }) {
+export function SignalMonitor({ signals, aiReady, mode, now, onSignal, onEntry, hasPositions }: { signals: Signal[]; aiReady: boolean; mode: SignalMode; now: number; onSignal: (signal: Signal) => void; onEntry: () => void; hasPositions: boolean }) {
   const [enabled, setEnabled] = useState<boolean | null>(null);
   const [autoEntry, setAutoEntry] = useState(false);
+  const [autoExit, setAutoExit] = useState(false);
+  const [exitNote, setExitNote] = useState("");
   const [entryNotes, setEntryNotes] = useState<Record<string, string>>({});
   const [scanning, setScanning] = useState("");
   const [results, setResults] = useState<Result[]>([]);
@@ -34,10 +36,30 @@ export function SignalMonitor({ signals, aiReady, mode, now, onSignal, onEntry }
     const timer = setTimeout(() => {
       setEnabled(read(preference) !== "off");
       setAutoEntry(read(autoPreference) !== "off");
+      setAutoExit(read("sinyallab-auto-paper-exit") !== "off");
       setPermission("Notification" in window ? Notification.permission : "unsupported");
     }, 0);
     return () => clearTimeout(timer);
   }, []);
+  useEffect(() => {
+    if (!autoExit || !hasPositions) return;
+    let stopped = false, running = false;
+    const check = async () => {
+      if (stopped || running || read("sinyallab-auto-paper-exit") === "off") return;
+      running = true;
+      try {
+        await api("positions/auto-exit", "POST", {});
+        if (!stopped) { setExitNote("Pemeriksaan exit selesai; hasil posisi dimuat ulang."); refresh.current(); }
+      } catch (error) { if (!stopped) setExitNote(`Exit belum terkonfirmasi: ${errorMessage(error)}`); }
+      finally { running = false; }
+    };
+    const run = () => {
+      if (navigator.locks) void navigator.locks.request("sinyallab-auto-exit", { ifAvailable: true }, async lock => { if (lock) await check(); });
+      else void check();
+    };
+    const initial = setTimeout(run, 0), interval = setInterval(run, 60000);
+    return () => { stopped = true; clearTimeout(initial); clearInterval(interval); };
+  }, [autoExit, hasPositions]);
   useEffect(() => {
     if (enabled === null) return;
     let stopped = false, running = false, lastStarted = 0;
@@ -129,7 +151,9 @@ export function SignalMonitor({ signals, aiReady, mode, now, onSignal, onEntry }
     <div className="monitor-body">
       <p>{mode === "TECHNICAL" ? "Mode teknikal tanpa AI: kandidat yang lolos tren, volume, breakout dan risiko dapat dibuka sebagai simulasi." : aiReady ? "Analisis teknikal + review AI aktif (mengikuti kuota harian)." : "Review AI belum tersedia. Mode ini menunggu konfirmasi AI sebelum entry."}</p>
       <p>Pemantauan berjalan selama aplikasi terbuka; tab tertidur atau ditutup dapat menghentikannya. Entry otomatis hanya simulasi, bukan order exchange. WAIT tidak dipaksa menjadi entry.</p>
-      <p>Stop-loss / target masih berupa alert, belum auto-close. Pantau Posisi paper. Jeda tidak membatalkan entry yang sudah terkirim.</p>
+      <p>Auto-close SL/TP paper: {autoExit ? "AKTIF" : "JEDA"}. Diperiksa tiap 60 detik selama aplikasi terbuka, terpisah dari jeda entry. Fill memakai harga terbaru, bukan jaminan harga stop/target; sentuhan harga di antara pemeriksaan bisa terlewat. Jeda tidak membatalkan permintaan yang sudah terkirim.</p>
+      <button onClick={() => { const value = !autoExit; save("sinyallab-auto-paper-exit", value ? "on" : "off"); setAutoExit(value); }}>{autoExit ? "Jeda auto-close paper" : "Aktifkan auto-close paper"}</button>
+      {exitNote && <p role="status">{exitNote}</p>}
       <p role="status">{autoEntry && mode === "TECHNICAL" && enabled ? "Entry paper otomatis AKTIF — tanpa agent / token AI. Server memeriksa ulang harga dan risiko sebelum entry." : "Entry paper otomatis dijeda (memerlukan pemantauan aktif dan mode teknikal)."}</p>
       <div className="monitor-actions">
         <button disabled={enabled === null} onClick={() => { const value = !enabled; save(preference, value ? "on" : "off"); setEnabled(value); setScanning(""); }}>{enabled ? "Jeda pemantauan" : "Aktifkan pemantauan"}</button>

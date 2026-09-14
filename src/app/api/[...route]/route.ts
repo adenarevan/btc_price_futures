@@ -144,6 +144,8 @@ async function handler(
         data = await service.openManualPosition(owner.uid, b, key);
       } else if (path === "positions/refresh" && req.method === "POST")
         data = await service.refreshPositions(owner.uid);
+      else if (path === "positions/auto-exit" && req.method === "POST")
+        data = await service.refreshPositions(owner.uid, true);
       else if (
         segments[0] === "positions" &&
         segments[2] === "close" &&

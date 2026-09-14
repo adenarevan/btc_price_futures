@@ -36,7 +36,7 @@ vi.mock("../../src/lib/market", async (importOriginal) => ({
   marketSnapshot: state.market,
   fetchFunding: async () => ({ events: [], complete: true, nextCursor: Date.now() }),
 }));
-import { openManualPosition, closePosition, previewManualPosition, openPosition as openStrategyPosition } from "../../src/lib/services";
+import { openManualPosition, closePosition, previewManualPosition, refreshPositions, openPosition as openStrategyPosition } from "../../src/lib/services";
 afterEach(() => vi.unstubAllEnvs());
 
 beforeEach(() => {
@@ -46,6 +46,36 @@ beforeEach(() => {
   state.market.mockImplementation(async () => snapshot());
 });
 describe("manual service lifecycle with isolated persistence", () => {
+  it.each(["LONG", "SHORT"] as const)("auto closes %s only at fresh executable stop/target, once", async side => {
+    for (const level of ["stop", "target"] as const) {
+      const p = await openManualPosition("test-owner", { symbol: "BTCUSDT", side }, `exit-open-${side}-${level}`);
+      await refreshPositions("test-owner", true);
+      expect((state.docs.get(`users/test-owner/positions/${p.id}`) as Position).status).toBe("OPEN");
+      state.market.mockImplementation(async () => {
+        const s = snapshot();
+        s.quote.bid = p[level]; s.quote.ask = p[level]; s.derivatives.markPrice = p[level];
+        return s;
+      });
+      await refreshPositions("test-owner");
+      expect((state.docs.get(`users/test-owner/positions/${p.id}`) as Position).status).toBe("OPEN");
+      await refreshPositions("test-owner", true);
+      const closed = state.docs.get(`users/test-owner/positions/${p.id}`) as Position;
+      expect(closed.status).toBe("CLOSED");
+      expect(closed.validityFlags).toContain(level === "stop" ? "AUTO_EXIT_STOP" : "AUTO_EXIT_TARGET");
+      const balance = (state.docs.get(accountPath) as PaperAccount).availableCollateral;
+      await refreshPositions("test-owner", true);
+      expect((state.docs.get(accountPath) as PaperAccount).availableCollateral).toBe(balance);
+      state.market.mockImplementation(async () => snapshot());
+    }
+  });
+  it("does not auto close using stale data", async () => {
+    const p = await openManualPosition("test-owner", { symbol: "BTCUSDT", side: "LONG" }, "stale-exit-open");
+    state.market.mockImplementation(async () => { const s = snapshot(); s.quote.bid = p.stop; s.quote.ask = p.stop; s.quote.fetchedAt -= 60000; return s; });
+    await refreshPositions("test-owner", true);
+    const stored = state.docs.get(`users/test-owner/positions/${p.id}`) as Position;
+    expect(stored.status).toBe("OPEN");
+    expect(stored.validityFlags).toContain("POSITION_UNVERIFIED");
+  });
   it("opens a qualified technical signal with AI disabled, retaining risk revalidation", async () => {
     vi.stubEnv("AI_ENABLED", "false");
     const baseline = evaluateBaseline(snapshot(), DEFAULT_SETTINGS, { account: newAccount(), positions: [] });

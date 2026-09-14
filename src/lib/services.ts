@@ -177,6 +177,7 @@ async function reconcile(
   deadline: number,
   writes: PendingWrite[],
   snapshots: Map<SymbolName, MarketSnapshot>,
+  autoExit = false,
 ) {
   for (let i = 0; i < ctx.positions.length; i++) {
     let p = ctx.positions[i]!;
@@ -227,16 +228,23 @@ async function reconcile(
       if (p.status === "CLOSED_PENDING_FUNDING" && p.fundingComplete)
         p.status = "CLOSED";
       p = ledger.refreshPosition(p, s, Date.now());
-      if (p.status === "OPEN" && p.marginEstimate.breach) {
+      const quote = D(p.side === "LONG" ? s.quote.bid : s.quote.ask);
+      const stopHit = p.side === "LONG" ? quote.lte(p.stop) : quote.gte(p.stop);
+      const targetHit = p.side === "LONG" ? quote.gte(p.target) : quote.lte(p.target);
+      if (p.status === "OPEN" && (p.marginEstimate.breach || (autoExit && (stopHit || targetHit)))) {
         const mutation = ledger.closePosition({
           account: ctx.account,
           position: p,
           snapshot: s,
           now: Date.now(),
-          modelBreach: true,
+          modelBreach: p.marginEstimate.breach,
         });
         ctx.account = mutation.account;
         p = mutation.position;
+        if (autoExit && !p.marginEstimate.breach) {
+          p.closeReason = stopHit ? "AUTO_EXIT_STOP" : "AUTO_EXIT_TARGET";
+          p.validityFlags = [...new Set([...p.validityFlags, p.closeReason])];
+        }
         writes.push(...ledgerWrites(mutation.ledger));
       }
     } catch {
@@ -252,14 +260,14 @@ async function reconcile(
     ctx.positions[i] = p;
   }
 }
-export async function refreshPositions(uid: string) {
+export async function refreshPositions(uid: string, autoExit = false) {
   return mutate(
     uid,
-    "refresh",
+    autoExit ? "auto-exit" : "refresh",
     randomUUID(),
     {},
     async (ctx, deadline, writes) => {
-      await reconcile(ctx, deadline, writes, new Map());
+      await reconcile(ctx, deadline, writes, new Map(), autoExit);
       return {
         positions: ctx.positions,
         summary: accountSummary(ctx.account, ctx.positions),

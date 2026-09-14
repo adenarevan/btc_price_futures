@@ -28,6 +28,7 @@ async function main() {
     // General smoke checks must not start scheduled scans or consume AI quota.
     await context.addInitScript(() => localStorage.setItem("sinyallab-signal-monitor", "off"));
     await context.addInitScript(() => localStorage.setItem("sinyallab-auto-paper-entry", "off"));
+    await context.addInitScript(() => localStorage.setItem("sinyallab-auto-paper-exit", "off"));
     await context.addCookies([{ name: production ? "__Host-sinyallab_session" : "sinyallab_dev_session", value: session, url: baseUrl, httpOnly: true, secure: production, sameSite: "Lax" }]);
     const page = await context.newPage();
     const errors: string[] = [];
