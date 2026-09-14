@@ -5,13 +5,19 @@ import type { Signal, SymbolName } from "@/lib/domain";
 import { LIVE_SYMBOLS } from "@/lib/live-market";
 import { nextScanAt, scanCandle, signalAlert } from "@/lib/signal-alerts";
 import { api, errorMessage, messages } from "./api";
+import { signalProgress } from "@/lib/signal-progress";
+import type { SignalMode } from "@/lib/signal-policy";
+import { autoEntryRequest } from "@/lib/auto-entry";
 
 const preference = "sinyallab-signal-monitor";
+const autoPreference = "sinyallab-auto-paper-entry";
 function read(key: string) { try { return localStorage.getItem(key); } catch { return null; } }
 function save(key: string, value: string) { try { localStorage.setItem(key, value); } catch { /* In-memory operation still works. */ } }
 type Result = { symbol: SymbolName; signal?: Signal; error?: string };
-export function SignalMonitor({ signals, aiReady, now, onSignal }: { signals: Signal[]; aiReady: boolean; now: number; onSignal: (signal: Signal) => void }) {
+export function SignalMonitor({ signals, aiReady, mode, now, onSignal, onEntry }: { signals: Signal[]; aiReady: boolean; mode: SignalMode; now: number; onSignal: (signal: Signal) => void; onEntry: () => void }) {
   const [enabled, setEnabled] = useState<boolean | null>(null);
+  const [autoEntry, setAutoEntry] = useState(false);
+  const [entryNotes, setEntryNotes] = useState<Record<string, string>>({});
   const [scanning, setScanning] = useState("");
   const [results, setResults] = useState<Result[]>([]);
   const [alerts, setAlerts] = useState<Signal[]>([]);
@@ -21,10 +27,13 @@ export function SignalMonitor({ signals, aiReady, now, onSignal }: { signals: Si
   const trigger = useRef<() => void>(() => {});
   const initialSignals = useRef(signals);
   const publish = useRef(onSignal);
+  const refresh = useRef(onEntry);
+  useEffect(() => { refresh.current = onEntry; }, [onEntry]);
   useEffect(() => { initialSignals.current = signals; publish.current = onSignal; }, [signals, onSignal]);
   useEffect(() => {
     const timer = setTimeout(() => {
       setEnabled(read(preference) !== "off");
+      setAutoEntry(read(autoPreference) !== "off");
       setPermission("Notification" in window ? Notification.permission : "unsupported");
     }, 0);
     return () => clearTimeout(timer);
@@ -34,6 +43,24 @@ export function SignalMonitor({ signals, aiReady, now, onSignal }: { signals: Si
     let stopped = false, running = false, lastStarted = 0;
     const seen = new Set<string>();
     const completed = new Map<string, number>();
+    const attempted = new Set<string>();
+    async function enter(signal: Signal) {
+      if (stopped || !autoEntry || mode !== "TECHNICAL" || read(autoPreference) === "off" || read(preference) === "off") return;
+      const request = autoEntryRequest(signal, Date.now());
+      if (!request || attempted.has(signal.id)) return;
+      attempted.add(signal.id);
+      const status = (message: string) => { if (!stopped) setEntryNotes(rows => ({ ...rows, [signal.symbol]: message })); };
+      status(`${signal.symbol}: mengirim entry paper ${signal.side}…`);
+      try {
+        await api("positions", "POST", request.body, request.key);
+        status(`${signal.symbol}: entry paper ${signal.side} berhasil. Lihat Posisi paper.`);
+        refresh.current();
+      } catch (error) {
+        status(`${signal.symbol}: entry belum dikonfirmasi — ${errorMessage(error)}`);
+        // A timeout may occur after commit. Refresh instead of assuming failure/success.
+        refresh.current();
+      }
+    }
     async function notify(signal: Signal) {
       const alert = signalAlert(signal, Date.now());
       if (!alert || stopped) return;
@@ -65,14 +92,14 @@ export function SignalMonitor({ signals, aiReady, now, onSignal }: { signals: Si
             const key = `sinyallab-scan-${symbol}`;
             const latest = initialSignals.current.find(s => s.symbol === symbol && !s.strategyVersion.startsWith("manual-"));
             const done = Number(read(key)) >= candle || (completed.get(symbol) ?? 0) >= candle;
-            if (!force && done) { if (latest) { setResults(rows => [...rows.filter(r => r.symbol !== symbol), { symbol, signal: latest }]); await notify(latest); } continue; }
+            if (!force && done) { if (latest) { setResults(rows => [...rows.filter(r => r.symbol !== symbol), { symbol, signal: latest }]); await notify(latest); await enter(latest); } continue; }
             setScanning(symbol);
             try {
               const signal = await api<Signal>("analysis", "POST", { symbol });
               if (stopped) break;
               completed.set(symbol, signal.candleEndAt); save(key, String(signal.candleEndAt));
               setResults(rows => [...rows.filter(r => r.symbol !== symbol), { symbol, signal }]);
-              publish.current(signal); await notify(signal);
+              publish.current(signal); await notify(signal); await enter(signal);
             } catch (error) {
               if (!stopped) setResults(rows => [...rows.filter(r => r.symbol !== symbol), { symbol, error: errorMessage(error) }]);
             }
@@ -88,7 +115,7 @@ export function SignalMonitor({ signals, aiReady, now, onSignal }: { signals: Si
     const resume = () => { if (document.visibilityState === "visible" && enabled) void scan(); };
     document.addEventListener("visibilitychange", resume);
     return () => { stopped = true; trigger.current = () => {}; clearTimeout(initial); clearInterval(interval); document.removeEventListener("visibilitychange", resume); };
-  }, [enabled]);
+  }, [enabled, autoEntry, mode]);
   async function requestPermission() {
     if (!("Notification" in window)) { setPermission("unsupported"); return; }
     try { setPermission(await Notification.requestPermission()); }
@@ -100,16 +127,20 @@ export function SignalMonitor({ signals, aiReady, now, onSignal }: { signals: Si
       <span className={`badge ${enabled ? "green" : ""}`}>{scanning && enabled ? `Analisis ${scanning}` : enabled ? "MEMANTAU" : "JEDA"}</span>
     </div>
     <div className="monitor-body">
-      <p>{aiReady ? "Analisis teknikal + review AI aktif (mengikuti kuota harian)." : "Analisis teknikal aktif. Review AI belum dikonfigurasi; kandidat diberi label belum dikonfirmasi AI."}</p>
-      <p>Pemantauan berjalan selama aplikasi terbuka. Notifikasi di panel otomatis; notifikasi perangkat memerlukan izin browser. Tidak membuka posisi otomatis.</p>
+      <p>{mode === "TECHNICAL" ? "Mode teknikal tanpa AI: kandidat yang lolos tren, volume, breakout dan risiko dapat dibuka sebagai simulasi." : aiReady ? "Analisis teknikal + review AI aktif (mengikuti kuota harian)." : "Review AI belum tersedia. Mode ini menunggu konfirmasi AI sebelum entry."}</p>
+      <p>Pemantauan berjalan selama aplikasi terbuka; tab tertidur atau ditutup dapat menghentikannya. Entry otomatis hanya simulasi, bukan order exchange. WAIT tidak dipaksa menjadi entry.</p>
+      <p>Stop-loss / target masih berupa alert, belum auto-close. Pantau Posisi paper. Jeda tidak membatalkan entry yang sudah terkirim.</p>
+      <p role="status">{autoEntry && mode === "TECHNICAL" && enabled ? "Entry paper otomatis AKTIF — tanpa agent / token AI. Server memeriksa ulang harga dan risiko sebelum entry." : "Entry paper otomatis dijeda (memerlukan pemantauan aktif dan mode teknikal)."}</p>
       <div className="monitor-actions">
         <button disabled={enabled === null} onClick={() => { const value = !enabled; save(preference, value ? "on" : "off"); setEnabled(value); setScanning(""); }}>{enabled ? "Jeda pemantauan" : "Aktifkan pemantauan"}</button>
         <button disabled={!enabled || !!scanning} onClick={() => trigger.current()}>Scan sinyal sekarang</button>
+        <button disabled={enabled === null || mode !== "TECHNICAL"} onClick={() => { const value = !autoEntry; save(autoPreference, value ? "on" : "off"); setAutoEntry(value); }}>{autoEntry ? "Jeda entry paper otomatis" : "Aktifkan entry paper otomatis"}</button>
         <button disabled={permission === "granted" || permission === "unsupported"} onClick={() => void requestPermission()}>{permission === "granted" ? "Notifikasi perangkat aktif" : "Aktifkan notifikasi perangkat"}</button>
       </div>
       {permission === "denied" && <p>Izin notifikasi diblokir. Ubah izin situs di browser untuk menerima notifikasi perangkat; panel tetap bekerja.</p>}
       {permission === "unsupported" && <p>Browser ini memakai notifikasi di dalam aplikasi.</p>}
       {note && <p role="status">{note}</p>}
+      <div aria-live="polite">{Object.entries(entryNotes).map(([symbol, message]) => <p key={symbol}>{message}</p>)}</div>
       {enabled && next && <p className="subtle">Candle berikutnya diperiksa mulai {new Date(next).toLocaleTimeString("id-ID", { timeZone: "Asia/Jakarta" })} WIB. Scan gagal dicoba lagi setelah jeda.</p>}
       <div className="signal-alert-list" aria-live="polite" aria-relevant="additions">
         {alerts.filter(s => s.expiresAt > now).map(s => {
@@ -124,7 +155,7 @@ export function SignalMonitor({ signals, aiReady, now, onSignal }: { signals: Si
         const row = results.find(r => r.symbol === symbol); if (!row) return null;
         const alert = row.signal && signalAlert(row.signal, now);
         const reasons = row.signal?.baseline?.reasons ?? [];
-        return <div key={symbol}><strong>{symbol}</strong><span>{row.error ?? (alert ? alert.title : reasons.map(r => messages[r] ?? r).join(" ") || "WAIT — review belum menyetujui entry.")}</span>{row.signal && <Link href={`/signals/${row.signal.id}`}>Detail ↗</Link>}</div>;
+        return <div key={symbol}><strong>{symbol}</strong><span>{row.error ?? (alert ? alert.title : (row.signal && signalProgress(row.signal)) || reasons.map(r => messages[r] ?? r).join(" ") || "WAIT — belum ada persetujuan entry.")}</span>{row.signal && <Link href={`/signals/${row.signal.id}`}>Detail ↗</Link>}</div>;
       })}</div>}
     </div>
   </section>;

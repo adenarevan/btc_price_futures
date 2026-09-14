@@ -14,6 +14,7 @@ import {
 } from "./engine";
 import { marketSnapshot, fetchFunding, symbolSchema } from "./market";
 import { reviewCandidate } from "./agent";
+import { signalMode, decideSignal, entryApproved } from "./signal-policy";
 import * as repo from "./repository";
 import * as ledger from "./portfolio/ledger";
 import type {
@@ -82,6 +83,7 @@ export async function readDashboard(uid: string) {
     usage: usage ?? { reserved: 0 },
     demo: getConfig().demo,
     aiReady: cfg.aiEnabled && getConfig().AI_ENABLED === "true" && !!getConfig().OPENAI_API_KEY,
+    signalMode: signalMode(cfg.aiEnabled, getConfig().AI_ENABLED),
   };
 }
 function ledgerWrites(entries: LedgerEntry[]): PendingWrite[] {
@@ -281,8 +283,8 @@ export async function openPosition(
         getSignal(uid, signalId),
         repo.settings(uid),
       ]);
-      if (!cfg.aiEnabled || getConfig().AI_ENABLED === "false")
-        throw new AppError("AI_DISABLED", 409);
+      if (!entryApproved(signal, signalMode(cfg.aiEnabled, getConfig().AI_ENABLED)))
+        throw new AppError("SIGNAL_NOT_APPROVED", 409);
       const snapshots = new Map<SymbolName, MarketSnapshot>();
       await reconcile(ctx, deadline, writes, snapshots);
       const s = await marketSnapshot(signal.symbol, deadline);
@@ -451,6 +453,7 @@ export async function analyze(uid: string, symbol: SymbolName) {
       repo.settings(uid),
       marketSnapshot(symbol, startedAt + 45000),
     ]);
+    const mode = signalMode(cfg.aiEnabled, getConfig().AI_ENABLED);
     const baseline = evaluateBaseline(s, cfg, ctx),
       id = ledger.hash([
         uid,
@@ -460,6 +463,8 @@ export async function analyze(uid: string, symbol: SymbolName) {
         baseline.candleEndAt,
         "perp-breakout-v1",
         cfg.version,
+        "confirmation-v2",
+        mode,
       ]);
     const existing = await repo.read<Signal>(repo.path(uid, "signals", id));
     if (existing) {
@@ -473,13 +478,12 @@ export async function analyze(uid: string, symbol: SymbolName) {
     }
     let review: Awaited<ReturnType<typeof reviewCandidate>> = {
       review: null,
-      reviewStatus: "NOT_REQUESTED",
+      reviewStatus: mode === "TECHNICAL" && baseline.decision !== "WAIT" ? "TECHNICAL_CONFIRMED" : "NOT_REQUESTED",
       inputTokens: 0,
       outputTokens: 0,
     };
     if (
-      cfg.aiEnabled &&
-      getConfig().AI_ENABLED === "true" &&
+      mode === "AI" &&
       !!getConfig().OPENAI_API_KEY &&
       baseline.decision !== "WAIT"
     ) {
@@ -509,7 +513,7 @@ export async function analyze(uid: string, symbol: SymbolName) {
       symbol,
       side: baseline.side,
       decision:
-        review.review?.verdict === "CONFIRM" ? baseline.decision : "WAIT",
+        decideSignal(baseline, mode, review.review?.verdict),
       snapshotId: s.id,
       candleEndAt: baseline.candleEndAt ?? s.serverTime,
       expiresAt: baseline.expiresAt ?? s.serverTime,

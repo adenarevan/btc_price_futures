@@ -466,6 +466,13 @@ export function evaluateBaseline(
         description: "Spread bid/ask bps",
       },
       "price.atr": { value: a, description: "ATR14 Wilder 15m" },
+      "volume.required": { value: "1.5", description: "Ambang rasio volume" },
+      "breakout.upper": { value: high.toFixed(), description: "LONG memerlukan penutupan di atas high 20 candle sebelumnya" },
+      "breakout.lower": { value: low.toFixed(), description: "SHORT memerlukan penutupan di bawah low 20 candle sebelumnya" },
+      "trigger.close": { value: trigger.close, description: "Penutupan candle pemicu" },
+      "gate.trendLong": { value: ema50.gt(ema200), description: "Tren 1h mendukung LONG (EMA50 > EMA200)" },
+      "gate.trendShort": { value: ema50.lt(ema200), description: "Tren 1h mendukung SHORT (EMA50 < EMA200)" },
+      "gate.volume": { value: avg.gt(0) && D(trigger.volume).gte(avg.mul("1.5")), description: "Filter volume terpenuhi" },
       "data.closed": {
         value: true,
         description: "Candle tertutup dan berurutan",

@@ -1,6 +1,6 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
-import { snapshot } from "../../fixtures/market";
-import { DEFAULT_SETTINGS, newAccount } from "../../src/lib/engine";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { snapshot, accountingSignal } from "../../fixtures/market";
+import { DEFAULT_SETTINGS, newAccount, evaluateBaseline } from "../../src/lib/engine";
 import { D } from "../../src/lib/decimal";
 import type { PaperAccount, Position } from "../../src/lib/domain";
 
@@ -36,7 +36,8 @@ vi.mock("../../src/lib/market", async (importOriginal) => ({
   marketSnapshot: state.market,
   fetchFunding: async () => ({ events: [], complete: true, nextCursor: Date.now() }),
 }));
-import { openManualPosition, closePosition, previewManualPosition } from "../../src/lib/services";
+import { openManualPosition, closePosition, previewManualPosition, openPosition as openStrategyPosition } from "../../src/lib/services";
+afterEach(() => vi.unstubAllEnvs());
 
 beforeEach(() => {
   state.docs.clear();
@@ -45,6 +46,17 @@ beforeEach(() => {
   state.market.mockImplementation(async () => snapshot());
 });
 describe("manual service lifecycle with isolated persistence", () => {
+  it("opens a qualified technical signal with AI disabled, retaining risk revalidation", async () => {
+    vi.stubEnv("AI_ENABLED", "false");
+    const baseline = evaluateBaseline(snapshot(), DEFAULT_SETTINGS, { account: newAccount(), positions: [] });
+    const signal = { ...accountingSignal(), id: "technical-confirmed", baseline, plan: baseline.plan, reviewStatus: "TECHNICAL_CONFIRMED" };
+    state.docs.set(`users/test-owner/signals/${signal.id}`, signal);
+    const opened = await openStrategyPosition("test-owner", signal.id, baseline.plan!.leverage, "technical-open-test");
+    expect(opened.status).toBe("OPEN");
+    expect(D(opened.plannedRisk).lte(5)).toBe(true);
+    expect(D(opened.initialMargin).lte(100)).toBe(true);
+    expect(opened.sourceSignalId).toBe(signal.id);
+  });
   it("previews read-only, commits once per key, closes and reconciles collateral", async () => {
     const input = { symbol: "BTCUSDT", side: "LONG" } as const;
     await previewManualPosition("test-owner", input);

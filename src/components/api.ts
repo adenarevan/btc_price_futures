@@ -48,6 +48,7 @@ export const messages: Record<string, string> = {
   SPREAD_RISK: "Selisih bid dan ask terlalu lebar untuk entry.",
   REQUEST_TIMEOUT: "Permintaan terlalu lama. Muat ulang data untuk memeriksa hasil sebelum mengulang transaksi.",
   AI_DISABLED: "Review AI atau entry sedang dimatikan.",
+  SIGNAL_NOT_APPROVED: "Sinyal belum disetujui untuk mode aktif. Jalankan analisis baru; sinyal lama tidak otomatis diluluskan.",
 };
 export async function api<T>(
   path: string,

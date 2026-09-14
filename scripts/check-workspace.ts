@@ -27,12 +27,22 @@ async function main() {
     const context = await browser.newContext({ viewport: { width: 1366, height: 900 } });
     // General smoke checks must not start scheduled scans or consume AI quota.
     await context.addInitScript(() => localStorage.setItem("sinyallab-signal-monitor", "off"));
+    await context.addInitScript(() => localStorage.setItem("sinyallab-auto-paper-entry", "off"));
     await context.addCookies([{ name: production ? "__Host-sinyallab_session" : "sinyallab_dev_session", value: session, url: baseUrl, httpOnly: true, secure: production, sameSite: "Lax" }]);
     const page = await context.newPage();
     const errors: string[] = [];
     page.on("pageerror", error => errors.push(error.message));
     let scans = 0;
-    if (process.argv.includes("--alerts")) {
+    const autoTest = process.argv.includes("--auto-entry");
+    const orders: string[] = [];
+    if (autoTest) await page.route("**/api/positions", async route => {
+      if (route.request().method() !== "POST") return route.continue();
+      const { signalId } = route.request().postDataJSON();
+      orders.push(signalId);
+      expect(route.request().headers()["idempotency-key"]).toBe(`auto-paper-${signalId}`);
+      await route.fulfill({ json: { data: { id: `paper-${signalId}`, status: "OPEN" } } });
+    });
+    if (process.argv.includes("--alerts") || autoTest) {
       await page.route("**/api/analysis", async route => {
         scans++;
         const { symbol } = route.request().postDataJSON();
@@ -40,6 +50,7 @@ async function main() {
         s.symbol = symbol; s.id = `alert-test-${symbol}`;
         s.baseline = { decision: s.decision, side: s.side, reasons: [], evidence: {}, plan: s.plan, candleEndAt: s.candleEndAt, expiresAt: s.expiresAt };
         s.decision = "WAIT";
+        if (autoTest) { s.decision = s.baseline.decision; s.reviewStatus = "TECHNICAL_CONFIRMED"; }
         if (!["BTCUSDT", "ETHUSDT"].includes(symbol)) { s.plan = null; s.baseline.decision = "WAIT"; s.baseline.reasons = ["VOLUME_FILTER"]; }
         await route.fulfill({ json: { data: s } });
       });
@@ -47,6 +58,11 @@ async function main() {
     const dashboardResponse = page.waitForResponse(r => r.url().endsWith("/api/dashboard"));
     await page.goto(`${baseUrl}/dashboard`);
     expect((await dashboardResponse).status()).toBe(200);
+    if (process.argv.includes("--technical")) {
+      expect((await (await dashboardResponse).json()).data.signalMode).toBe("TECHNICAL");
+      await expect(page.getByText("Mode teknikal tanpa AI:", { exact: false })).toBeVisible({ timeout: 20000 });
+      console.log("PASS: deployed workspace uses explicit technical confirmation without AI");
+    }
     await expect(page.getByRole("heading", { name: "Latihan paper trade" })).toBeVisible({ timeout: 20000 });
     if (process.argv.includes("--auth-only")) {
       const csrf = await context.request.get(`${baseUrl}/api/auth/csrf`);
@@ -55,6 +71,20 @@ async function main() {
       if (production) expect(csrf.headers()["set-cookie"]).toContain("__Host-sinyallab_nonce=");
       expect(errors).toEqual([]);
       console.log("PASS: production CSRF endpoint, secure nonce cookie and authenticated workspace/Firebase reads. Password was not changed or supplied.");
+      return;
+    }
+    if (autoTest) {
+      await page.getByRole("button", { name: "Aktifkan entry paper otomatis", exact: true }).click();
+      await page.getByRole("button", { name: "Aktifkan pemantauan", exact: true }).click();
+      await expect(page.getByText("BTCUSDT: entry paper LONG berhasil.", { exact: false })).toBeVisible({ timeout: 20000 });
+      await expect(page.getByText("ETHUSDT: entry paper SHORT berhasil.", { exact: false })).toBeVisible({ timeout: 20000 });
+      await expect(page.locator(".monitor-results > div")).toHaveCount(5);
+      expect(orders).toEqual(["alert-test-BTCUSDT", "alert-test-ETHUSDT"]);
+      await page.getByRole("button", { name: "Jeda entry paper otomatis", exact: true }).click();
+      await expect(page.getByText("Entry paper otomatis dijeda", { exact: false })).toBeVisible();
+      await page.getByRole("button", { name: "Jeda pemantauan", exact: true }).click();
+      expect(errors).toEqual([]);
+      console.log("PASS: automatic LONG/SHORT paper requests, stable idempotency keys, WAIT exclusion and pause; all orders intercepted, no ledger mutations.");
       return;
     }
     if (process.argv.includes("--alerts")) {

@@ -14,6 +14,8 @@ import type {
 import { api, errorMessage, messages } from "./api";
 import { useLiveMarket } from "./use-live-market";
 import { SignalMonitor } from "./signal-monitor";
+import { signalProgress } from "@/lib/signal-progress";
+import type { SignalMode } from "@/lib/signal-policy";
 import { fresh, quoteFresh, estimatePositionNet, type LiveQuote } from "@/lib/live-market";
 type ManualInput = { symbol: SymbolName; side: "LONG" | "SHORT" };
 type Dashboard = {
@@ -25,6 +27,7 @@ type Dashboard = {
   usage: { reserved: number };
   demo: boolean;
   aiReady: boolean;
+  signalMode: SignalMode;
 };
 type Page<T> = { items: T[]; nextCursor: string | null };
 type RecordData = Record<string, unknown>;
@@ -406,7 +409,8 @@ export function Workspace({ section, id }: { section: string; id?: string }) {
             <span className={`badge ${streamStatus === "LIVE" ? "green" : ""}`}>{streamStatus === "LIVE" ? "● LIVE" : streamStatus === "POLLING" ? "Pembaruan cadangan · 10 detik" : streamStatus === "PAUSED" ? "Dijeda" : "Menghubungkan harga…"}</span>
             <span>Harga & estimasi P&L otomatis. Funding dan model risiko mengikuti pemeriksaan terakhir.</span>
           </div>}
-          {dashboard && <SignalMonitor signals={dashboard.signals} aiReady={dashboard.aiReady} now={now}
+          {dashboard && <SignalMonitor signals={dashboard.signals} aiReady={dashboard.aiReady} mode={dashboard.signalMode ?? "AI"} now={now}
+            onEntry={() => { void load(); }}
             onSignal={signal => setDashboard(current => current ? { ...current, signals: [signal, ...current.signals.filter(s => s.id !== signal.id)].slice(0, 25) } : current)} />}
           {loading ? (
             <div className="panel loading" aria-live="polite">
@@ -448,7 +452,7 @@ export function Workspace({ section, id }: { section: string; id?: string }) {
                 settings={dashboard.settings}
                 onOpen={(manual) => void previewManual(manual)}
               />
-              {!dashboard.aiReady && <p className="notice">Review AI belum aktif. Analisis tetap menampilkan kondisi strategi; untuk mencoba posisi sekarang, gunakan Latihan paper trade.</p>}
+              {!dashboard.aiReady && <p className="notice">{dashboard.signalMode === "TECHNICAL" ? "Mode teknikal tanpa token AI. Kandidat yang lolos semua filter bisa dikonfirmasi untuk membuka posisi paper." : "Mode review AI dipilih, tetapi AI belum tersedia. Kandidat belum dapat disetujui untuk entry strategi."}</p>}
               {!!dashboard.positions.length && (
                 <section className="panel">
                   <div className="panel-heading"><h2>Posisi kamu</h2><Link href="/positions">Lihat semua posisi ↗</Link></div>
@@ -962,6 +966,9 @@ function ManualExperiment({
 }
 function signalReason(signal: Signal) {
   if (signal.reviewStatus === "MANUAL_EXPERIMENT") return "Latihan manual yang kamu buat.";
+  if (signal.reviewStatus === "TECHNICAL_CONFIRMED") return "Lolos tren, breakout, volume dan risiko. Siap ditinjau untuk paper trade tanpa AI.";
+  const progress = signalProgress(signal);
+  if (progress) return progress;
   const reasons = signal.baseline?.reasons ?? [];
   if (reasons.length) return reasons.map((reason) => messages[reason] ?? reason.replaceAll("_", " ")).join(" ");
   if (signal.decision === "WAIT") return "Belum ada konfirmasi entry. Buka detail untuk melihat hasil pemeriksaan.";
@@ -1080,11 +1087,11 @@ function SignalDetail({
           Alasan:{" "}
           {signal.baseline?.reasons.join(", ") || "Filter baseline terpenuhi"}
         </p>
-        <h3>Review AI · {signal.reviewStatus}</h3>
+        <h3>{signal.reviewStatus === "TECHNICAL_CONFIRMED" ? "Konfirmasi teknikal · tanpa AI" : `Review AI · ${signal.reviewStatus}`}</h3>
         <pre>
           {signal.review
             ? JSON.stringify(signal.review, null, 2)
-            : "Review tidak diminta atau tidak tersedia."}
+            : signal.reviewStatus === "TECHNICAL_CONFIRMED" ? "Seluruh filter strategi dan rencana risiko lolos. Harga dan batas risiko diperiksa ulang saat membuka posisi." : "Review tidak diminta atau tidak tersedia."}
         </pre>
         <p className="warning">
           Ambang model simulasi; bukan harga likuidasi akun exchange. Model{" "}
