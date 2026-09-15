@@ -1089,6 +1089,7 @@ function SignalDetail({
           {signal.baseline?.reasons.join(", ") || "Filter baseline terpenuhi"}
         </p>
         <h3>{signal.reviewStatus === "TECHNICAL_CONFIRMED" ? "Konfirmasi teknikal · tanpa AI" : `Review AI · ${signal.reviewStatus}`}</h3>
+        {signal.reviewProvider && signal.reviewProvider !== "none" && <p>Penyedia: {signal.reviewProvider === "oao" ? "OAO (pihak ketiga)" : "OpenAI"} · model: {signal.reviewModel}</p>}
         <pre>
           {signal.review
             ? JSON.stringify(signal.review, null, 2)

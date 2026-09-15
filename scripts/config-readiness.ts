@@ -1,5 +1,5 @@
 // Emits only field names and booleans, never environment values.
-import { getConfig } from "../src/lib/config";
+import { aiKeyPresent, getConfig } from "../src/lib/config";
 import { ConfigurationError } from "../src/lib/errors";
 import { createPrivateKey } from "node:crypto";
 const file = process.argv[2] ?? ".env.local";
@@ -23,7 +23,7 @@ try {
     adminEmailPresent: !!c.ADMIN_AUTH_EMAIL,
     privateKeyValid: false,
     aiEnabled: c.AI_ENABLED === "true",
-    aiKeyPresent: !!c.OPENAI_API_KEY,
+    aiKeyPresent: aiKeyPresent(),
   };
   try { createPrivateKey(c.FIREBASE_PRIVATE_KEY.replace(/\\n/g, "\n")); checks.privateKeyValid = true; } catch { /* No secret in output. */ }
   console.log(JSON.stringify({ configurationValid: true, invalidRawEnumFields: invalid, checks }));

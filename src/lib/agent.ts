@@ -1,7 +1,7 @@
 import OpenAI from "openai";
 import { z } from "zod";
 import { zodTextFormat } from "openai/helpers/zod";
-import { getConfig } from "./config";
+import { aiKeyPresent, getConfig } from "./config";
 import type { BaselineResult, MarketSnapshot } from "./domain";
 import { check } from "./engine";
 export const reviewSchema = z
@@ -59,7 +59,7 @@ export function validateReview(
   );
   check(
     r.verdict !== "CONFIRM" ||
-      (baseline.decision !== "WAIT" && r.supporting.length > 0),
+      (baseline.decision !== "WAIT" && r.supporting.length > 0 && r.missingEvidence.length === 0 && r.riskFlags.length === 0 && r.opposing.length === 0),
     "REVIEW_INVALID",
   );
   return r;
@@ -79,11 +79,42 @@ export async function reviewCandidate(
   });
   const cfg = getConfig();
   if (
-    !cfg.OPENAI_API_KEY ||
+    !aiKeyPresent() ||
     cfg.AI_ENABLED === "false" ||
     baseline.decision === "WAIT"
   )
     return unavailable();
+  if (cfg.AI_PROVIDER === "oao") {
+    // Third-party chat-completions API. Never forward Firebase/user credentials
+    // or the OpenAI key, follow redirects, or retry a potentially billed request.
+    let inputTokens = 0, outputTokens = 0;
+    try {
+      check(Date.now() < deadline - 3000, "AI_UNAVAILABLE");
+      const messages = [
+        { role: "system", content: instructions + " Respond with a single JSON object, no markdown. JSON schema: " + JSON.stringify(z.toJSONSchema(reviewSchema)) },
+        { role: "user", content: JSON.stringify({ symbol: snapshot.symbol, side: baseline.side, facts: baseline.evidence, context: snapshot.derivatives, plan: baseline.plan }) },
+      ];
+      const bound = Buffer.byteLength(JSON.stringify(messages));
+      check(bound <= 16000, "AI_UNAVAILABLE");
+      inputTokens = bound; outputTokens = 2000; // Conservative usage if provider omits usage/errors.
+      const response = await fetch("https://oao.clipora.buzz/v1/chat/completions", {
+        method: "POST", redirect: "error", cache: "no-store",
+        headers: { Authorization: `Bearer ${cfg.OAO_API_KEY}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ model: cfg.OAO_MODEL, messages, max_tokens: 2000, stream: false }),
+        signal: AbortSignal.timeout(Math.min(20000, deadline - Date.now() - 3000)),
+      });
+      check(response.ok, "AI_UNAVAILABLE");
+      const data = z.object({
+        choices: z.array(z.object({ finish_reason: z.literal("stop"), message: z.object({ content: z.string().max(16000), refusal: z.string().nullable().optional(), tool_calls: z.array(z.unknown()).max(0).optional() }) })).length(1),
+        usage: z.object({ prompt_tokens: z.number().int().nonnegative().max(16000), completion_tokens: z.number().int().nonnegative().max(2000) }).optional(),
+      }).parse(await response.json());
+      check(!data.choices[0]!.message.refusal, "REVIEW_INVALID");
+      inputTokens = data.usage?.prompt_tokens ?? bound;
+      outputTokens = data.usage?.completion_tokens ?? 2000;
+      const review = validateReview(JSON.parse(data.choices[0]!.message.content), baseline);
+      return { review, reviewStatus: "AVAILABLE", inputTokens, outputTokens };
+    } catch { return { ...unavailable("INVALID"), inputTokens, outputTokens }; }
+  }
   const client = new OpenAI({ apiKey: cfg.OPENAI_API_KEY, maxRetries: 0 });
   let inputTokens = 0,
     outputTokens = 0,

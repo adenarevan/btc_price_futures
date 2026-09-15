@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { FieldValue } from "firebase-admin/firestore";
 import { z } from "zod";
 import { getDb } from "./firebase/admin";
-import { getConfig } from "./config";
+import { aiKeyPresent, getConfig } from "./config";
 import { AppError, safeError } from "./errors";
 import { D } from "./decimal";
 import {
@@ -82,7 +82,7 @@ export async function readDashboard(uid: string) {
     settings: cfg,
     usage: usage ?? { reserved: 0 },
     demo: getConfig().demo,
-    aiReady: cfg.aiEnabled && getConfig().AI_ENABLED === "true" && !!getConfig().OPENAI_API_KEY,
+    aiReady: cfg.aiEnabled && getConfig().AI_ENABLED === "true" && aiKeyPresent(),
     signalMode: signalMode(cfg.aiEnabled, getConfig().AI_ENABLED),
   };
 }
@@ -473,6 +473,7 @@ export async function analyze(uid: string, symbol: SymbolName) {
         cfg.version,
         "confirmation-v2",
         mode,
+        mode === "AI" ? [getConfig().AI_PROVIDER, getConfig().AI_PROVIDER === "oao" ? getConfig().OAO_MODEL : getConfig().OPENAI_MODEL] : null,
       ]);
     const existing = await repo.read<Signal>(repo.path(uid, "signals", id));
     if (existing) {
@@ -492,7 +493,7 @@ export async function analyze(uid: string, symbol: SymbolName) {
     };
     if (
       mode === "AI" &&
-      !!getConfig().OPENAI_API_KEY &&
+      aiKeyPresent() &&
       baseline.decision !== "WAIT"
     ) {
       let reserved = false;
@@ -531,6 +532,8 @@ export async function analyze(uid: string, symbol: SymbolName) {
       baseline,
       review: review.review,
       reviewStatus: review.reviewStatus,
+      reviewProvider: mode === "AI" ? getConfig().AI_PROVIDER : "none",
+      reviewModel: mode === "AI" ? (getConfig().AI_PROVIDER === "oao" ? getConfig().OAO_MODEL : getConfig().OPENAI_MODEL) : null,
       strategyVersion: "perp-breakout-v1",
       settingsVersion: cfg.version,
     };

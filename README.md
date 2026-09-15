@@ -4,6 +4,12 @@ Aplikasi latihan futures USDT dengan saldo paper. Kontrak: BTC, ETH, SOL, BNB, X
 
 ## Cara mencoba
 
+### Review lewat OAO (opsional, pihak ketiga)
+
+Set environment server/Vercel `AI_PROVIDER=oao`, `OAO_MODEL=auto-oao-1`, `OAO_API_KEY=<key baru privat>` dan `AI_ENABLED=true`, aktifkan review AI di pengaturan akun, lalu redeploy. Jangan gunakan key yang telah dibagikan di chat, jangan commit key, dan jangan gunakan prefix `NEXT_PUBLIC_`. OpenAI key tetap terpisah dan tidak dikirim ke OAO. Endpoint tetap `https://oao.clipora.buzz/v1/chat/completions`; data yang dikirim hanya simbol, sisi, fakta teknikal, konteks derivatif dan rencana paper. Tidak ada kredensial Firebase atau data login dalam prompt.
+
+OAO hanya mereview kandidat yang telah lolos engine, mengikuti kuota harian yang ada; ia tidak membuat semua WAIT menjadi LONG/SHORT. Respons JSON divalidasi dan wajib merujuk factId yang tersedia. Timeout 20 detik, error, refusal, respons terpotong, fakta palsu atau bukti bertentangan menghasilkan review INVALID/WAIT, tanpa retry berbayar atau fallback ke OpenAI. Ini integrasi kompatibilitas berdasarkan contoh endpoint pengguna; tes unit memakai respons tiruan, bukan bukti kualitas model atau profit. Uji layanan sungguhan memerlukan key pengganti. Di mode AI entry tetap memerlukan konfirmasi manual; auto-entry yang ada hanya untuk mode teknikal. Auto-close tidak memerlukan AI.
+
 1. Buka `http://localhost:3000/dashboard` dan login memakai akun pemilik.
 2. Di **Latihan paper trade**, pilih coin dan arah. LONG menguji kenaikan harga; SHORT menguji penurunan harga.
 3. Klik **Lihat perkiraan trade**. Baca entry, stop/target alert, jumlah kontrak, margin, risiko dan perkiraan hasil di target.

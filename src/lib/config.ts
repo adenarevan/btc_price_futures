@@ -13,6 +13,9 @@ const schema = z.object({
   RATE_LIMIT_HMAC_SECRET: z.string().default(""),
   OPENAI_API_KEY: z.string().default(""),
   OPENAI_MODEL: z.string().default("gpt-5-mini-2025-08-07"),
+  AI_PROVIDER: z.enum(["openai", "oao"]).default("openai"),
+  OAO_API_KEY: z.string().trim().default(""),
+  OAO_MODEL: z.string().trim().min(1).max(100).default("auto-oao-1"),
   DEMO_MODE: z.enum(["true", "false"]).default("false"),
   AI_ENABLED: z.enum(["true", "false"]).default("true"),
   AUTOMATION_ENABLED: z.enum(["false"]).default("false"),
@@ -29,7 +32,7 @@ export function getConfig() {
   const env = { ...process.env };
   // Hosting dashboards can save empty values. Optional settings should then
   // use their declared defaults, not coerce an empty session lifetime to zero.
-  for (const key of ["APP_ORIGIN", "ADMIN_USERNAME", "SESSION_MAX_AGE_SECONDS", "DEMO_MODE", "AI_ENABLED", "AUTOMATION_ENABLED", "OPENAI_MODEL"]) {
+  for (const key of ["APP_ORIGIN", "ADMIN_USERNAME", "SESSION_MAX_AGE_SECONDS", "DEMO_MODE", "AI_ENABLED", "AUTOMATION_ENABLED", "OPENAI_MODEL", "AI_PROVIDER", "OAO_MODEL"]) {
     const value = env[key]?.trim();
     if (!value) delete env[key];
     else env[key] = value;
@@ -57,4 +60,8 @@ export function getConfig() {
   )
     throw new ConfigurationError(["DEMO_MODE"]);
   return { ...c, local, demo: c.DEMO_MODE === "true" };
+}
+export function aiKeyPresent() {
+  const c = getConfig();
+  return !!(c.AI_PROVIDER === "oao" ? c.OAO_API_KEY : c.OPENAI_API_KEY);
 }
