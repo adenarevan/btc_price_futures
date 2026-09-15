@@ -991,7 +991,7 @@ function SignalTable({ items }: { items: Signal[] }) {
         </thead>
         <tbody>
           {items.map((s) => (
-            <tr key={s.id}>
+            <tr key={s.id} className={s.decision !== "WAIT" && s.plan ? "entry-row" : ""}>
               <td>
                 <strong>{s.symbol}</strong>
                 <small className="cell-note">PERPETUAL · USDT</small>
@@ -1145,7 +1145,7 @@ function PositionCard({
         ? bid.lte(p.stop) || bid.gte(p.target)
         : ask.gte(p.stop) || ask.lte(p.target);
   return (
-    <article className="position-card">
+    <article className={`position-card ${p.status === "OPEN" ? "entry-active" : ""}`}>
       <div className="panel-heading">
         <h3>
           {p.symbol} <Tag value={p.side} />

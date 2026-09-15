@@ -752,6 +752,11 @@ summary {
   padding: 5px 20px 20px;
   margin-bottom: 20px;
 }
+.position-card.entry-active {
+  border-color: color-mix(in srgb, var(--red) 70%, transparent);
+  background: linear-gradient(180deg, rgba(239, 146, 146, 0.16), rgba(239, 146, 146, 0.05));
+  box-shadow: inset 4px 0 0 var(--red);
+}
 .position-card > .panel-heading {
   padding-left: 0;
   padding-right: 0;
@@ -761,6 +766,13 @@ summary {
 }
 .position-card > button {
   margin: 10px;
+}
+tr.entry-row {
+  background: rgba(239, 146, 146, 0.11);
+  box-shadow: inset 4px 0 0 var(--red);
+}
+tr.entry-row td:first-child strong {
+  color: var(--red);
 }
 .evaluation-intro {
   text-align: center;
