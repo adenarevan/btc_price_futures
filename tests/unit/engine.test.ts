@@ -22,6 +22,18 @@ describe('PRD deterministic futures accounting',()=>{
   it('AT12 changing margin does not multiply price PNL',()=>{const a=opened();a.position.leverage=3;a.position.initialMargin=D(200).div(3).toFixed();a.position.collateral=a.position.initialMargin;a.s.quote.bid='110';a.s.quote.ask='110';expect(closePosition({...a,snapshot:a.s,now}).position.grossPnl).toBe('20');});
 });
 describe('strategy, indicator and rejection gates',()=>{
+  it.each(['LONG','SHORT'] as const)('active breakout accepts average volume and ignores older extremes: %s',side=>{
+    const s=snapshot(side);
+    s.candles15m.at(-1)!.volume='100';
+    s.candles15m.at(-15)![side==='LONG'?'high':'low']=side==='LONG'?'110':'90';
+    const r=evaluateBaseline(s,DEFAULT_SETTINGS,{account:newAccount(),positions:[]});
+    expect(r.decision).toBe(`${side}_CANDIDATE`);
+    expect(D(r.plan!.plannedRisk).lte(5)).toBe(true);
+  });
+  it('active breakout still rejects below-average volume',()=>{
+    const s=snapshot();s.candles15m.at(-1)!.volume='99';
+    expect(evaluateBaseline(s,DEFAULT_SETTINGS,{account:newAccount(),positions:[]}).reasons).toContain('VOLUME_FILTER');
+  });
   it('EMA uses SMA seed',()=>expect(ema(['1','2','3','4'],3)).toBe('3'));
   it('ATR fixture uses positive Wilder values',()=>expect(D(atr(snapshot().candles15m)).gt(0)).toBe(true));
   it('AT10 floors quantity',()=>expect(floorToStep('1.2349','.001').toFixed()).toBe('1.234'));

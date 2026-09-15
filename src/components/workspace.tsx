@@ -2,6 +2,7 @@
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import { D } from "@/lib/decimal";
+import { STRATEGY_VERSION } from "@/lib/domain";
 import type {
   AccountSummary,
   PaperAccount,
@@ -61,11 +62,15 @@ const watchlist: Array<{
   { symbol: "SOLUSDT", name: "Solana", icon: "S", tone: "sol" },
   { symbol: "BNBUSDT", name: "BNB", icon: "◆", tone: "bnb" },
   { symbol: "XRPUSDT", name: "XRP", icon: "X", tone: "xrp" },
+  { symbol: "DOGEUSDT", name: "Dogecoin", icon: "Ð", tone: "bnb" },
+  { symbol: "SUIUSDT", name: "Sui", icon: "S", tone: "xrp" },
+  { symbol: "LINKUSDT", name: "Chainlink", icon: "L", tone: "eth" },
 ];
 function money(value: string | null | undefined, places = 2) {
   if (value === undefined || value === null) return "—";
   try {
-    const [whole, fraction] = D(value).toFixed(places).split(".");
+    const precision = D(value).abs().gt(0) && D(value).abs().lt(1) ? Math.max(places, 4) : places;
+    const [whole, fraction] = D(value).toFixed(precision).split(".");
     return whole!.replace(/\B(?=(\d{3})+(?!\d))/g, ",") + (fraction ? `.${fraction}` : "");
   } catch {
     return "—";
@@ -783,7 +788,7 @@ export function Workspace({ section, id }: { section: string; id?: string }) {
               </div>
               <div className="gate-grid">
                 <div>
-                  <strong>perp-breakout-v1</strong>
+                  <strong>{STRATEGY_VERSION}</strong>
                   <span>Versi strategi</span>
                 </div>
                 <div>

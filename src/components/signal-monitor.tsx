@@ -2,6 +2,7 @@
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import type { Signal, SymbolName } from "@/lib/domain";
+import { STRATEGY_VERSION } from "@/lib/domain";
 import { LIVE_SYMBOLS } from "@/lib/live-market";
 import { nextScanAt, scanCandle, signalAlert } from "@/lib/signal-alerts";
 import { api, errorMessage, messages } from "./api";
@@ -111,7 +112,7 @@ export function SignalMonitor({ signals, aiReady, mode, now, onSignal, onEntry, 
         try {
           for (const symbol of LIVE_SYMBOLS) {
             if (stopped) break;
-            const key = `sinyallab-scan-${symbol}`;
+            const key = `sinyallab-scan-${STRATEGY_VERSION}-${symbol}`;
             const latest = initialSignals.current.find(s => s.symbol === symbol && !s.strategyVersion.startsWith("manual-"));
             const done = Number(read(key)) >= candle || (completed.get(symbol) ?? 0) >= candle;
             if (!force && done) { if (latest) { setResults(rows => [...rows.filter(r => r.symbol !== symbol), { symbol, signal: latest }]); await notify(latest); await enter(latest); } continue; }

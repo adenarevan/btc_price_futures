@@ -5,6 +5,7 @@ import { hash } from "./portfolio/ledger";
 import { AppError } from "./errors";
 import {
   MARKET_TYPE,
+  SUPPORTED_SYMBOLS,
   PROVIDER,
   type Candle,
   type FundingEvent,
@@ -12,13 +13,7 @@ import {
   type MarketSnapshot,
   type SymbolName,
 } from "./domain";
-export const symbolSchema = z.enum([
-  "BTCUSDT",
-  "ETHUSDT",
-  "SOLUSDT",
-  "BNBUSDT",
-  "XRPUSDT",
-]);
+export const symbolSchema = z.enum(SUPPORTED_SYMBOLS);
 const dec = z.string().refine((s) => {
   try {
     return D(s).isFinite();

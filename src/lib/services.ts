@@ -5,6 +5,8 @@ import { getDb } from "./firebase/admin";
 import { aiKeyPresent, getConfig } from "./config";
 import { AppError, safeError } from "./errors";
 import { D } from "./decimal";
+import { STRATEGY_VERSION } from "./domain";
+import { sendSignalEmail } from "./email-alerts";
 import {
   accountSummary,
   check,
@@ -469,7 +471,7 @@ export async function analyze(uid: string, symbol: SymbolName) {
         s.instrumentKey,
         baseline.side,
         baseline.candleEndAt,
-        "perp-breakout-v1",
+        STRATEGY_VERSION,
         cfg.version,
         "confirmation-v2",
         mode,
@@ -483,6 +485,7 @@ export async function analyze(uid: string, symbol: SymbolName) {
         signalId: existing.id,
         reused: true,
       });
+      await sendSignalEmail(uid, existing);
       return existing;
     }
     let review: Awaited<ReturnType<typeof reviewCandidate>> = {
@@ -534,7 +537,7 @@ export async function analyze(uid: string, symbol: SymbolName) {
       reviewStatus: review.reviewStatus,
       reviewProvider: mode === "AI" ? getConfig().AI_PROVIDER : "none",
       reviewModel: mode === "AI" ? (getConfig().AI_PROVIDER === "oao" ? getConfig().OAO_MODEL : getConfig().OPENAI_MODEL) : null,
-      strategyVersion: "perp-breakout-v1",
+      strategyVersion: STRATEGY_VERSION,
       settingsVersion: cfg.version,
     };
     if (Date.now() >= signal.expiresAt) signal.decision = "WAIT";
@@ -558,6 +561,7 @@ export async function analyze(uid: string, symbol: SymbolName) {
         signalId: id,
       });
     });
+    await sendSignalEmail(uid, signal);
     return signal;
   } catch (error) {
     await runRef.update({

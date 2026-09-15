@@ -431,8 +431,8 @@ export function evaluateBaseline(
     check(s.serverTime < result.expiresAt, "DATA_STALE");
     const previous = s.candles15m.slice(-21, -1),
       avg = sum(previous.map((c) => c.volume)).div(20),
-      high = max(...previous.map((c) => c.high)),
-      low = min(...previous.map((c) => c.low));
+      high = max(...previous.slice(-8).map((c) => c.high)),
+      low = min(...previous.slice(-8).map((c) => c.low));
     const ema50 = D(
         ema(
           s.candles1h.slice(-500).map((c) => c.close),
@@ -466,19 +466,19 @@ export function evaluateBaseline(
         description: "Spread bid/ask bps",
       },
       "price.atr": { value: a, description: "ATR14 Wilder 15m" },
-      "volume.required": { value: "1.5", description: "Ambang rasio volume" },
-      "breakout.upper": { value: high.toFixed(), description: "LONG memerlukan penutupan di atas high 20 candle sebelumnya" },
-      "breakout.lower": { value: low.toFixed(), description: "SHORT memerlukan penutupan di bawah low 20 candle sebelumnya" },
+      "volume.required": { value: "1", description: "Ambang rasio volume" },
+      "breakout.upper": { value: high.toFixed(), description: "LONG memerlukan penutupan di atas high 8 candle sebelumnya" },
+      "breakout.lower": { value: low.toFixed(), description: "SHORT memerlukan penutupan di bawah low 8 candle sebelumnya" },
       "trigger.close": { value: trigger.close, description: "Penutupan candle pemicu" },
       "gate.trendLong": { value: ema50.gt(ema200), description: "Tren 1h mendukung LONG (EMA50 > EMA200)" },
       "gate.trendShort": { value: ema50.lt(ema200), description: "Tren 1h mendukung SHORT (EMA50 < EMA200)" },
-      "gate.volume": { value: avg.gt(0) && D(trigger.volume).gte(avg.mul("1.5")), description: "Filter volume terpenuhi" },
+      "gate.volume": { value: avg.gt(0) && D(trigger.volume).gte(avg), description: "Filter volume terpenuhi" },
       "data.closed": {
         value: true,
         description: "Candle tertutup dan berurutan",
       },
     };
-    check(avg.gt(0) && D(trigger.volume).gte(avg.mul("1.5")), "VOLUME_FILTER");
+    check(avg.gt(0) && D(trigger.volume).gte(avg), "VOLUME_FILTER");
     check(spread.lte(20), "SPREAD_RISK");
     check(mid.sub(trigger.close).abs().lte(D(a).mul("0.5")), "EXTENDED_PRICE");
     const long = ema50.gt(ema200) && D(trigger.close).gt(high),

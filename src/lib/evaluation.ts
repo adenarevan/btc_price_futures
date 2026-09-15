@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { SUPPORTED_SYMBOLS } from "./domain";
 import { D, sum, max } from "./decimal";
 const decimal = z.string().refine((v) => {
   try {
@@ -20,7 +21,7 @@ const versions = z
 const trade = z
   .object({
     id: z.string().min(1),
-    symbol: z.enum(["BTCUSDT", "ETHUSDT", "SOLUSDT", "BNBUSDT", "XRPUSDT"]),
+    symbol: z.enum(SUPPORTED_SYMBOLS),
     side: z.enum(["LONG", "SHORT"]),
     qty: decimal,
     entry: decimal,

@@ -1,7 +1,8 @@
 import { D } from "./decimal";
 import type { Position, SymbolName } from "./domain";
+import { SUPPORTED_SYMBOLS } from "./domain";
 
-export const LIVE_SYMBOLS: SymbolName[] = ["BTCUSDT", "ETHUSDT", "SOLUSDT", "BNBUSDT", "XRPUSDT"];
+export const LIVE_SYMBOLS: SymbolName[] = [...SUPPORTED_SYMBOLS];
 export const LIVE_MAX_AGE = 15000;
 export type LiveQuote = {
   symbol: SymbolName;

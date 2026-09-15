@@ -4,12 +4,16 @@ export type SymbolName =
   | "ETHUSDT"
   | "SOLUSDT"
   | "BNBUSDT"
-  | "XRPUSDT";
+  | "XRPUSDT"
+  | "DOGEUSDT"
+  | "SUIUSDT"
+  | "LINKUSDT";
+export const SUPPORTED_SYMBOLS = ["BTCUSDT", "ETHUSDT", "SOLUSDT", "BNBUSDT", "XRPUSDT", "DOGEUSDT", "SUIUSDT", "LINKUSDT"] as const;
 export type Side = "LONG" | "SHORT";
 export type Leverage = 1 | 2 | 3 | 5;
 export const PROVIDER = "binance-usdm-public" as const;
 export const MARKET_TYPE = "USDT_LINEAR_PERPETUAL" as const;
-export const STRATEGY_VERSION = "perp-breakout-v1";
+export const STRATEGY_VERSION = "perp-breakout-active-v2";
 export const MARGIN_MODEL = "isolated-linear-estimate-v1";
 export interface Candle {
   instrumentKey: string;
@@ -101,7 +105,7 @@ export interface TradingSettings {
 }
 export const DEFAULT_SETTINGS: TradingSettings = {
   accountId: "paper-futures-v1",
-  watchlist: ["BTCUSDT", "ETHUSDT", "SOLUSDT", "BNBUSDT", "XRPUSDT"],
+  watchlist: [...SUPPORTED_SYMBOLS],
   initialCapital: "1000",
   defaultLeverage: 3,
   feeRate: "0.0006",
