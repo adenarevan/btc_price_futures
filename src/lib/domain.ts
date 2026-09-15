@@ -13,7 +13,7 @@ export type Side = "LONG" | "SHORT";
 export type Leverage = 1 | 2 | 3 | 5;
 export const PROVIDER = "binance-usdm-public" as const;
 export const MARKET_TYPE = "USDT_LINEAR_PERPETUAL" as const;
-export const STRATEGY_VERSION = "perp-breakout-active-v2";
+export const STRATEGY_VERSION = "perp-breakout-net-v3";
 export const MARGIN_MODEL = "isolated-linear-estimate-v1";
 export interface Candle {
   instrumentKey: string;

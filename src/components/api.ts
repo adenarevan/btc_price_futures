@@ -43,6 +43,7 @@ export const messages: Record<string, string> = {
   INSUFFICIENT_COLLATERAL: "Collateral tersedia belum cukup untuk margin dan biaya posisi ini.",
   PROVIDER_RATE_LIMITED: "Penyedia harga sedang membatasi permintaan. Tunggu sebentar lalu muat ulang harga.",
   VOLUME_FILTER: "Volume candle belum mencapai rata-rata 20 candle sebelumnya. Belum ada sinyal entry.",
+  TARGET_TOO_DISTANT: "Biaya membuat target bersih 2R melebihi 6× ATR. Menunggu pergerakan harga yang lebih memadai.",
   TREND_BREAKOUT_FILTER: "Tren dan penembusan harga belum searah. Tunggu candle 15 menit berikutnya.",
   EXTENDED_PRICE: "Harga sudah terlalu jauh dari pemicu. Tunggu setup berikutnya.",
   SPREAD_RISK: "Selisih bid dan ask terlalu lebar untuk entry.",

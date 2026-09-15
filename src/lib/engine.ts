@@ -221,7 +221,7 @@ export function createPlan(input: {
   context: AccountContext;
   stop?: string;
   target?: string;
-  // Manual practice can target 2R after costs; baseline keeps its PRD price target.
+  // Optional target calculated after all modeled costs.
   targetNetRR?: 2;
 }): TradePlan {
   const { snapshot: s, side, settings: cfg, context } = input;
@@ -496,7 +496,13 @@ export function evaluateBaseline(
       triggerClose: trigger.close,
       settings,
       context,
+      targetNetRR: 2,
     });
+    // Reject quiet markets where modeled costs force an excessive target.
+    if (D(result.plan.target).sub(result.plan.entry).abs().gt(D(a).mul(6))) {
+      result.plan = null;
+      check(false, "TARGET_TOO_DISTANT");
+    }
     result.decision = long ? "LONG_CANDIDATE" : "SHORT_CANDIDATE";
   } catch (error) {
     if (!(error instanceof EngineError)) throw error;

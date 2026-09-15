@@ -68,8 +68,8 @@ export function SignalMonitor({ signals, aiReady, mode, now, onSignal, onEntry, 
     const completed = new Map<string, number>();
     const attempted = new Set<string>();
     async function enter(signal: Signal) {
-      if (stopped || !autoEntry || mode !== "TECHNICAL" || read(autoPreference) === "off" || read(preference) === "off") return;
-      const request = autoEntryRequest(signal, Date.now());
+      if (stopped || !autoEntry || read(autoPreference) === "off" || read(preference) === "off") return;
+      const request = autoEntryRequest(signal, Date.now(), mode);
       if (!request || attempted.has(signal.id)) return;
       attempted.add(signal.id);
       const status = (message: string) => { if (!stopped) setEntryNotes(rows => ({ ...rows, [signal.symbol]: message })); };
@@ -155,11 +155,11 @@ export function SignalMonitor({ signals, aiReady, mode, now, onSignal, onEntry, 
       <p>Auto-close SL/TP paper: {autoExit ? "AKTIF" : "JEDA"}. Diperiksa tiap 60 detik selama aplikasi terbuka, terpisah dari jeda entry. Fill memakai harga terbaru, bukan jaminan harga stop/target; sentuhan harga di antara pemeriksaan bisa terlewat. Jeda tidak membatalkan permintaan yang sudah terkirim.</p>
       <button onClick={() => { const value = !autoExit; save("sinyallab-auto-paper-exit", value ? "on" : "off"); setAutoExit(value); }}>{autoExit ? "Jeda auto-close paper" : "Aktifkan auto-close paper"}</button>
       {exitNote && <p role="status">{exitNote}</p>}
-      <p role="status">{autoEntry && mode === "TECHNICAL" && enabled ? "Entry paper otomatis AKTIF — tanpa agent / token AI. Server memeriksa ulang harga dan risiko sebelum entry." : "Entry paper otomatis dijeda (memerlukan pemantauan aktif dan mode teknikal)."}</p>
+      <p role="status">{autoEntry && enabled ? `Entry paper otomatis AKTIF — ${mode === "TECHNICAL" ? "setelah lolos analisis teknikal" : "setelah konfirmasi AI"}. Server memeriksa ulang harga dan risiko sebelum entry.` : "Entry paper otomatis dijeda (memerlukan pemantauan aktif)."}</p>
       <div className="monitor-actions">
         <button disabled={enabled === null} onClick={() => { const value = !enabled; save(preference, value ? "on" : "off"); setEnabled(value); setScanning(""); }}>{enabled ? "Jeda pemantauan" : "Aktifkan pemantauan"}</button>
         <button disabled={!enabled || !!scanning} onClick={() => trigger.current()}>Scan sinyal sekarang</button>
-        <button disabled={enabled === null || mode !== "TECHNICAL"} onClick={() => { const value = !autoEntry; save(autoPreference, value ? "on" : "off"); setAutoEntry(value); }}>{autoEntry ? "Jeda entry paper otomatis" : "Aktifkan entry paper otomatis"}</button>
+        <button disabled={enabled === null} onClick={() => { const value = !autoEntry; save(autoPreference, value ? "on" : "off"); setAutoEntry(value); }}>{autoEntry ? "Jeda entry paper otomatis" : "Aktifkan entry paper otomatis"}</button>
         <button disabled={permission === "granted" || permission === "unsupported"} onClick={() => void requestPermission()}>{permission === "granted" ? "Notifikasi perangkat aktif" : "Aktifkan notifikasi perangkat"}</button>
       </div>
       {permission === "denied" && <p>Izin notifikasi diblokir. Ubah izin situs di browser untuk menerima notifikasi perangkat; panel tetap bekerja.</p>}

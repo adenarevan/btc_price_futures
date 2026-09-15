@@ -22,6 +22,17 @@ describe('PRD deterministic futures accounting',()=>{
   it('AT12 changing margin does not multiply price PNL',()=>{const a=opened();a.position.leverage=3;a.position.initialMargin=D(200).div(3).toFixed();a.position.collateral=a.position.initialMargin;a.s.quote.bid='110';a.s.quote.ask='110';expect(closePosition({...a,snapshot:a.s,now}).position.grossPnl).toBe('20');});
 });
 describe('strategy, indicator and rejection gates',()=>{
+  it.each(['LONG','SHORT'] as const)('net target covers costs at 2R: %s',side=>{
+    const result=evaluateBaseline(snapshot(side),DEFAULT_SETTINGS,{account:newAccount(),positions:[]});
+    expect(result.decision).toBe(`${side}_CANDIDATE`);
+    expect(D(result.plan!.netRR).gte(2)).toBe(true);
+  });
+  it('rejects a cost-adjusted target beyond the volatility limit',()=>{
+    const result=evaluateBaseline(snapshot(),{...DEFAULT_SETTINGS,feeRate:'0.03'},{account:newAccount(),positions:[]});
+    expect(result.reasons).toContain('TARGET_TOO_DISTANT');
+    expect(result.plan).toBeNull();
+    expect(result.decision).toBe('WAIT');
+  });
   it.each(['LONG','SHORT'] as const)('active breakout accepts average volume and ignores older extremes: %s',side=>{
     const s=snapshot(side);
     s.candles15m.at(-1)!.volume='100';

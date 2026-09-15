@@ -6,6 +6,13 @@ function candidate(side: "LONG" | "SHORT" = "LONG") {
   const signal = accountingSignal(side);
   return { ...signal, reviewStatus: "TECHNICAL_CONFIRMED", baseline: { decision: signal.decision, side, reasons: [], evidence: {}, plan: signal.plan, candleEndAt: signal.candleEndAt, expiresAt: signal.expiresAt } };
 }
+it("auto enters confirmed AI signals only in AI mode", () => {
+  const s = { ...candidate(), reviewStatus: "AVAILABLE", review: { verdict: "CONFIRM" } };
+  expect(autoEntryRequest(s, Date.now(), "AI")).not.toBeNull();
+  expect(autoEntryRequest(s, Date.now(), "TECHNICAL")).toBeNull();
+  expect(autoEntryRequest({ ...s, review: { verdict: "WAIT" } }, Date.now(), "AI")).toBeNull();
+  expect(autoEntryRequest(candidate(), Date.now(), "AI")).toBeNull();
+});
 it.each(["LONG", "SHORT"] as const)("creates a stable paper entry request for %s without AI", side => {
   const s = candidate(side);
   const request = autoEntryRequest(s, Date.now());
