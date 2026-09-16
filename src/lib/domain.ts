@@ -205,6 +205,7 @@ export interface Signal {
   baseline?: BaselineResult;
   review?: unknown;
   reviewStatus?: string;
+  reviewFailureCode?: string | null;
   reviewProvider?: "openai" | "oao" | "none";
   reviewModel?: string | null;
   strategyVersion: string;

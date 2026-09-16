@@ -164,7 +164,8 @@ async function mutate<T>(
           accountId: ctx.account.id,
           operation,
           createdAt: Date.now(),
-          positionId: (payload as { positionId?: string })?.positionId ?? null,
+          positionId: (payload as { positionId?: string })?.positionId ??
+            (["open", "manual-open"].includes(operation) ? (result as { id?: string })?.id ?? null : null),
         },
         true,
       );
@@ -491,6 +492,7 @@ export async function analyze(uid: string, symbol: SymbolName) {
     let review: Awaited<ReturnType<typeof reviewCandidate>> = {
       review: null,
       reviewStatus: mode === "TECHNICAL" && baseline.decision !== "WAIT" ? "TECHNICAL_CONFIRMED" : "NOT_REQUESTED",
+      reviewFailureCode: null as string | null,
       inputTokens: 0,
       outputTokens: 0,
     };
@@ -535,6 +537,7 @@ export async function analyze(uid: string, symbol: SymbolName) {
       baseline,
       review: review.review,
       reviewStatus: review.reviewStatus,
+      reviewFailureCode: review.reviewFailureCode,
       reviewProvider: mode === "AI" ? getConfig().AI_PROVIDER : "none",
       reviewModel: mode === "AI" ? (getConfig().AI_PROVIDER === "oao" ? getConfig().OAO_MODEL : getConfig().OPENAI_MODEL) : null,
       strategyVersion: STRATEGY_VERSION,

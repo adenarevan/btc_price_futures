@@ -4,14 +4,15 @@ import { signalAlert, scanCandle, nextScanAt, SIGNAL_INTERVAL } from "../../src/
 const now = 1800000000000;
 function candidate(side: "LONG" | "SHORT" = "LONG") {
   const s = accountingSignal(side, now);
-  return { ...s, baseline: { decision: s.decision, side, reasons: [], evidence: {}, plan: s.plan, candleEndAt: s.candleEndAt, expiresAt: s.expiresAt } };
+  return { ...s, reviewStatus: "TECHNICAL_CONFIRMED", baseline: { decision: s.decision, side, reasons: [], evidence: {}, plan: s.plan, candleEndAt: s.candleEndAt, expiresAt: s.expiresAt } };
 }
 describe("signal notification policy", () => {
   it.each(["LONG", "SHORT"] as const)("labels technical and AI-confirmed %s separately", side => {
     const s = candidate(side);
     s.decision = "WAIT";
-    expect(signalAlert(s, now)?.title).toContain(`${side} BTCUSDT · kandidat teknikal`);
+    expect(signalAlert(s, now)).toBeNull();
     s.decision = `${side}_CANDIDATE`;
+    s.reviewStatus = "AVAILABLE";
     s.review = { verdict: "CONFIRM" };
     expect(signalAlert(s, now)?.confirmed).toBe(true);
   });
@@ -24,6 +25,7 @@ describe("signal notification policy", () => {
       { ...s, plan: null },
       { ...s, review: { verdict: "WAIT" } },
       { ...s, reviewStatus: "ACCOUNT_CHANGED" },
+      { ...s, decision: "WAIT" as const, reviewStatus: "INVALID" },
       { ...s, baseline: { ...s.baseline, reasons: ["VOLUME_FILTER"] } },
     ]) expect(signalAlert(blocked, now)).toBeNull();
   });

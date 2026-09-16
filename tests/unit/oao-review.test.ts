@@ -44,3 +44,11 @@ it("does not call a provider for WAIT, disabled AI or missing OAO key; no OpenAI
   await reviewCandidate(baseline(), market, Date.now() + 30000);
   expect(fetcher).not.toHaveBeenCalled();
 });
+it("accepts a complete JSON code fence but still validates its evidence", async () => {
+  vi.stubGlobal("fetch", vi.fn().mockResolvedValue(Response.json({choices:[{finish_reason:"stop",message:{content:'```json\n'+JSON.stringify(valid())+'\n```'}}]})));
+  expect((await reviewCandidate(baseline(),market,Date.now()+30000)).reviewStatus).toBe("AVAILABLE");
+});
+it("records an HTTP failure code without exposing the provider body", async () => {
+  vi.stubGlobal("fetch",vi.fn().mockResolvedValue(new Response("secret",{status:401})));
+  expect(await reviewCandidate(baseline(),market,Date.now()+30000)).toMatchObject({reviewStatus:"INVALID",reviewFailureCode:"HTTP_401"});
+});

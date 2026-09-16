@@ -74,6 +74,7 @@ export async function reviewCandidate(
   const unavailable = (status = "UNAVAILABLE") => ({
     review: null as Review | null,
     reviewStatus: status,
+    reviewFailureCode: null as string | null,
     inputTokens: 0,
     outputTokens: 0,
   });
@@ -88,6 +89,7 @@ export async function reviewCandidate(
     // Third-party chat-completions API. Never forward Firebase/user credentials
     // or the OpenAI key, follow redirects, or retry a potentially billed request.
     let inputTokens = 0, outputTokens = 0;
+    let stage = "REQUEST";
     try {
       check(Date.now() < deadline - 3000, "AI_UNAVAILABLE");
       const messages = [
@@ -103,7 +105,9 @@ export async function reviewCandidate(
         body: JSON.stringify({ model: cfg.OAO_MODEL, messages, max_tokens: 2000, stream: false }),
         signal: AbortSignal.timeout(Math.min(20000, deadline - Date.now() - 3000)),
       });
+      stage = `HTTP_${response.status}`;
       check(response.ok, "AI_UNAVAILABLE");
+      stage = "RESPONSE_FORMAT";
       const data = z.object({
         choices: z.array(z.object({ finish_reason: z.literal("stop"), message: z.object({ content: z.string().max(16000), refusal: z.string().nullable().optional(), tool_calls: z.array(z.unknown()).max(0).optional() }) })).length(1),
         usage: z.object({ prompt_tokens: z.number().int().nonnegative().max(16000), completion_tokens: z.number().int().nonnegative().max(2000) }).optional(),
@@ -111,9 +115,16 @@ export async function reviewCandidate(
       check(!data.choices[0]!.message.refusal, "REVIEW_INVALID");
       inputTokens = data.usage?.prompt_tokens ?? bound;
       outputTokens = data.usage?.completion_tokens ?? 2000;
-      const review = validateReview(JSON.parse(data.choices[0]!.message.content), baseline);
-      return { review, reviewStatus: "AVAILABLE", inputTokens, outputTokens };
-    } catch { return { ...unavailable("INVALID"), inputTokens, outputTokens }; }
+      stage = "REVIEW_JSON";
+      const raw = data.choices[0]!.message.content.trim();
+      const fenced = /^```(?:json)?\s*\n([\s\S]*?)\n```$/i.exec(raw);
+      const parsed = JSON.parse(fenced ? fenced[1]! : raw);
+      stage = "REVIEW_VALIDATION";
+      const review = validateReview(parsed, baseline);
+      return { review, reviewStatus: "AVAILABLE", reviewFailureCode: null, inputTokens, outputTokens };
+    } catch {
+      return { ...unavailable("INVALID"), reviewFailureCode: stage, inputTokens, outputTokens };
+    }
   }
   const client = new OpenAI({ apiKey: cfg.OPENAI_API_KEY, maxRetries: 0 });
   let inputTokens = 0,
@@ -192,7 +203,7 @@ export async function reviewCandidate(
           JSON.parse(response.output_text),
           baseline,
         );
-        return { review, reviewStatus: "AVAILABLE", inputTokens, outputTokens };
+        return { review, reviewStatus: "AVAILABLE", reviewFailureCode: null, inputTokens, outputTokens };
       }
       input.push(...response.output);
       for (const call of calls) {

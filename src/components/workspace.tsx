@@ -417,7 +417,10 @@ export function Workspace({ section, id }: { section: string; id?: string }) {
           {dashboard && <SignalMonitor signals={dashboard.signals} aiReady={dashboard.aiReady} mode={dashboard.signalMode ?? "AI"} now={now}
             onEntry={() => { void load(); }}
             hasPositions={dashboard.positions.some(p => p.status === "OPEN")}
-            onSignal={signal => setDashboard(current => current ? { ...current, signals: [signal, ...current.signals.filter(s => s.id !== signal.id)].slice(0, 25) } : current)} />}
+            onSignal={signal => {
+              setDashboard(current => current ? { ...current, signals: [signal, ...current.signals.filter(s => s.id !== signal.id)].slice(0, 25) } : current);
+              if (section === "signals") void load();
+            }} />}
           {loading ? (
             <div className="panel loading" aria-live="polite">
               Memuat workspace…

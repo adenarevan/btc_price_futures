@@ -7,10 +7,9 @@ export function signalAlert(signal: Signal, now: number) {
   if (signal.strategyVersion.startsWith("manual-") || signal.reviewStatus === "ACCOUNT_CHANGED" || signal.consumedPositionId || !signal.plan || !signal.side || signal.expiresAt <= now || signal.createdAt > now + 5000) return null;
   const review = signal.review as { verdict?: string } | null;
   if (review?.verdict === "WAIT") return null;
-  const confirmed = signal.decision === `${signal.side}_CANDIDATE` && review?.verdict === "CONFIRM";
+  const confirmed = entryApproved(signal, "AI");
   const approvedTechnical = entryApproved(signal, "TECHNICAL");
-  const technical = signal.baseline?.decision === `${signal.side}_CANDIDATE` && !!signal.baseline.plan && signal.baseline.reasons.length === 0;
-  if (!confirmed && !technical) return null;
+  if (!confirmed && !approvedTechnical) return null;
   return {
     key: `${signal.symbol}:${signal.side}:${signal.candleEndAt}:${signal.strategyVersion}:${confirmed ? "confirmed" : "technical"}`,
     title: `${signal.side} ${signal.symbol} · ${confirmed ? "dikonfirmasi AI" : approvedTechnical ? "lolos analisis teknikal" : "kandidat teknikal"}`,
